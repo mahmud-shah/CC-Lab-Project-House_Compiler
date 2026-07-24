@@ -1,0 +1,4 @@
+Syntax Error [line 3, col 11]: Unexpected '{'
+  --> hint: an expression or ')' may be missing before this '{'
+Syntax Error [line 5, col 1]: Unexpected '}'
+2 error(s) found.

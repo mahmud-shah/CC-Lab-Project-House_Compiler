@@ -1,0 +1,4 @@
+Syntax Error [line 3, col 1]: Unexpected 'else'
+  --> hint: 'else' must directly follow the statement of an 'if'
+Syntax Error [line 3, col 17]: Unexpected '}'
+2 error(s) found.

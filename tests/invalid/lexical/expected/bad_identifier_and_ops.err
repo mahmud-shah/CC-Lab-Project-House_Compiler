@@ -1,0 +1,12 @@
+Lexical Error [line 1, col 5]: Invalid token '9lives': identifiers may not start with a digit
+  --> hint: identifiers must start with a letter or '_'
+Syntax Error [line 1, col 11]: Unexpected ';', expecting identifier
+Lexical Error [line 3, col 10]: Invalid token '&'
+  --> hint: logical AND in MiniLang is '&&'
+Syntax Error [line 3, col 12]: Unexpected 'false'
+Lexical Error [line 4, col 10]: Invalid token '|'
+  --> hint: logical OR in MiniLang is '||'
+Syntax Error [line 4, col 12]: Unexpected 'false'
+Lexical Error [line 5, col 6]: Invalid token '$'
+  --> hint: this character is not part of the MiniLang alphabet
+7 error(s) found.

@@ -1,0 +1,3 @@
+Lexical Error [line 3, col 1]: Unterminated block comment
+  --> hint: close the comment with '*/'
+1 error(s) found.

@@ -1,0 +1,3 @@
+Lexical Error [line 3, col 1]: Invalid token '@'
+  --> hint: this character is not part of the MiniLang alphabet
+1 error(s) found.

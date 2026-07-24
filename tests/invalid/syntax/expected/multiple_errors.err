@@ -1,0 +1,6 @@
+Syntax Error [line 2, col 1]: Unexpected 'bool', expecting ';'
+  --> hint: a semicolon may be missing at the end of the previous statement
+Syntax Error [line 3, col 5]: Unexpected ';'
+Syntax Error [line 5, col 8]: Unexpected end of file
+  --> hint: check for an unclosed '{' or a missing ';' on the last statement
+3 error(s) found.

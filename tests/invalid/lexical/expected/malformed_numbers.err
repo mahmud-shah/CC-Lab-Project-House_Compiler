@@ -1,0 +1,7 @@
+Lexical Error [line 2, col 5]: Malformed number '1.2.3' has more than one decimal point
+  --> hint: write a float as digits.digits, e.g. 3.14
+Syntax Error [line 2, col 10]: Unexpected ';'
+Lexical Error [line 3, col 5]: Malformed float literal '42.' has no digits after the decimal point
+  --> hint: write e.g. '42.0'
+Syntax Error [line 3, col 8]: Unexpected ';'
+4 error(s) found.
