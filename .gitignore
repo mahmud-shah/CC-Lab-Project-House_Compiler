@@ -1,7 +1,6 @@
-# Build output (all generated files live here)
 build/
 
-# Flex / Bison generated files if ever produced in-tree
+# Flex / Bison 
 lex.yy.c
 lex.yy.cpp
 *.tab.c
