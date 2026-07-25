@@ -1,0 +1,3 @@
+Semantic Error [line 3, col 7]: Undeclared variable 'y'
+  --> hint: declare it before use, e.g. 'int y;'
+1 error(s) found.

@@ -1,0 +1,9 @@
+Semantic Error [line 6, col 12]: Operator '&&' requires 'bool' operands, left operand is 'int'
+  --> hint: use a comparison to produce a 'bool', e.g. 'x > 0'
+Semantic Error [line 6, col 12]: Operator '&&' requires 'bool' operands, right operand is 'int'
+  --> hint: use a comparison to produce a 'bool', e.g. 'y < 10'
+Semantic Error [line 7, col 12]: Operator '||' requires 'bool' operands, left operand is 'int'
+  --> hint: use a comparison to produce a 'bool', e.g. 'x > 0'
+Semantic Error [line 7, col 12]: Operator '||' requires 'bool' operands, right operand is 'int'
+  --> hint: use a comparison to produce a 'bool', e.g. 'y < 10'
+4 error(s) found.

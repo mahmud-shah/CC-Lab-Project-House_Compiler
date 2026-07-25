@@ -1,0 +1,3 @@
+Semantic Error [line 7, col 7]: Undeclared variable 'inner'
+  --> hint: declare it before use, e.g. 'int inner;'
+1 error(s) found.

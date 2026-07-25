@@ -1,0 +1,5 @@
+Semantic Error [line 6, col 12]: Operator '==' cannot compare 'int' with 'bool'
+  --> hint: both sides must be the same kind: both numeric or both 'bool'
+Semantic Error [line 7, col 15]: Operator '!=' cannot compare 'bool' with 'int'
+  --> hint: both sides must be the same kind: both numeric or both 'bool'
+2 error(s) found.

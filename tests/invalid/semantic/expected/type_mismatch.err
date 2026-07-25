@@ -1,0 +1,7 @@
+Semantic Error [line 4, col 1]: Cannot assign 'int' to variable 'flag' of type 'bool'
+  --> hint: 'flag' is 'bool'; assign 'true' or 'false'
+Semantic Error [line 5, col 1]: Cannot assign 'bool' to variable 'x' of type 'int'
+  --> hint: 'x' is 'int'; a 'bool' value cannot be used here
+Semantic Error [line 6, col 1]: Cannot assign 'bool' to variable 'f' of type 'float'
+  --> hint: 'f' is 'float'; a 'bool' value cannot be used here
+3 error(s) found.

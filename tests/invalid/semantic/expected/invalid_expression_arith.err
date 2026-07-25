@@ -1,0 +1,5 @@
+Semantic Error [line 4, col 7]: Operator '+' requires numeric operands, left operand is 'bool'
+  --> hint: arithmetic operators cannot be applied to 'bool'
+Semantic Error [line 5, col 7]: Operator '*' requires numeric operands, left operand is 'bool'
+  --> hint: arithmetic operators cannot be applied to 'bool'
+2 error(s) found.

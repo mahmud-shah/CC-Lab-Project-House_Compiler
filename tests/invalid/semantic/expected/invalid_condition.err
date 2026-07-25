@@ -1,0 +1,5 @@
+Semantic Error [line 3, col 5]: Condition of 'if' must be 'bool', got 'int'
+  --> hint: use a comparison expression, e.g. 'x > 0'
+Semantic Error [line 6, col 8]: Condition of 'while' must be 'bool', got 'int'
+  --> hint: use a comparison expression, e.g. 'x > 0'
+2 error(s) found.

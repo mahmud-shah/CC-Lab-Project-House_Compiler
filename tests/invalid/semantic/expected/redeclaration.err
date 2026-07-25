@@ -1,0 +1,3 @@
+Semantic Error [line 2, col 5]: Redeclaration of variable 'x' (already declared at line 1)
+  --> hint: choose a different name, or remove the duplicate declaration
+1 error(s) found.

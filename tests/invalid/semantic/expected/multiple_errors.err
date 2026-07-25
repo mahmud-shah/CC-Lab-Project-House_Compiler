@@ -1,0 +1,9 @@
+Semantic Error [line 2, col 5]: Redeclaration of variable 'a' (already declared at line 1)
+  --> hint: choose a different name, or remove the duplicate declaration
+Semantic Error [line 4, col 1]: Cannot assign 'bool' to variable 'a' of type 'int'
+  --> hint: 'a' is 'int'; a 'bool' value cannot be used here
+Semantic Error [line 5, col 1]: Cannot assign 'int' to variable 'flag' of type 'bool'
+  --> hint: 'flag' is 'bool'; assign 'true' or 'false'
+Semantic Error [line 6, col 7]: Undeclared variable 'z'
+  --> hint: declare it before use, e.g. 'int z;'
+4 error(s) found.
