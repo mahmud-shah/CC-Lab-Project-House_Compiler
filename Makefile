@@ -14,7 +14,8 @@ CPP_SRCS := \
     src/ast/ast.cpp \
     src/ast/ast_printer.cpp \
     src/symbol_table/symbol_table.cpp \
-    src/symbol_table/symbol_table_printer.cpp
+    src/symbol_table/symbol_table_printer.cpp\
+	src/semantic/semantic_analyzer.cpp
 
 LEXER_L      := src/lexer/lexer.l
 LEXER_GEN    := $(BUILD)/gen/lex.yy.cpp
