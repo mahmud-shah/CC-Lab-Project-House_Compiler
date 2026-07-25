@@ -7,8 +7,6 @@
 
 namespace minilang {
 
-global)
-
 class SymbolTablePrinter {
 public:
     explicit SymbolTablePrinter(std::ostream& os) : os_(os) {}
