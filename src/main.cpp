@@ -1,20 +1,3 @@
-// ============================================================================
-// mcc - the MiniLang compiler driver
-//
-// Owns the compilation pipeline; each project phase adds one stage:
-//
-//     source --> Lexer (Flex) --> Parser (Bison) --> AST
-//                                                     |
-//                        [next phases: semantic analysis, TAC]
-//
-// Modes:
-//     mcc <file>            compile (currently: lex + parse, report errors)
-//     mcc <file> --tokens   dump the token stream only (scanner in isolation)
-//     mcc <file> --ast      compile and print the abstract syntax tree
-//
-// Exit codes: 0 = clean, 1 = compilation errors, 2 = usage/IO problem.
-// ============================================================================
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -26,6 +9,8 @@
 #include "minilang/ast_printer.hpp"
 #include "minilang/error_reporter.hpp"
 #include "minilang/lexer.hpp"
+#include "minilang/symbol_table.hpp"
+#include "minilang/symbol_table_printer.hpp"
 #include "parser.tab.hpp"
 
 namespace {
@@ -34,6 +19,7 @@ struct Options {
     std::string sourcePath;
     bool tokens = false;
     bool ast    = false;
+    bool symtab = false;
 };
 
 void printUsage(const char* prog) {
@@ -43,12 +29,10 @@ void printUsage(const char* prog) {
         << "Options:\n"
         << "  --tokens     print the token stream produced by the lexer\n"
         << "  --ast        print the abstract syntax tree after parsing\n"
+        << "  --symtab     print the symbol table after semantic analysis\n"
         << "  --help       show this message\n";
 }
 
-// Scanner-in-isolation mode: prints one row per token. Lexical errors are
-// collected and printed afterwards, so a bad character never hides the
-// tokens that follow it.
 int runTokenDump(minilang::ErrorReporter& reporter) {
     std::cout << std::left
               << std::setw(10) << "LOC"
@@ -77,7 +61,7 @@ int runTokenDump(minilang::ErrorReporter& reporter) {
                                 break;
             case TOK_IDENT:
                 std::cout << "\"" << yylval.sval << "\"";
-                std::free(yylval.sval); // dump mode is the value's consumer
+                std::free(yylval.sval); 
                 break;
             default: break;
         }
@@ -95,8 +79,34 @@ int runTokenDump(minilang::ErrorReporter& reporter) {
     return reporter.hasErrors() ? 1 : 0;
 }
 
-// Full pipeline (current phases): parse the file - the parser pulls tokens
-// from the lexer itself - then report every collected diagnostic.
+void buildSymbolTablePrePass(minilang::ASTNode* node,
+                             minilang::SymbolTable& table) {
+    if (!node) return;
+
+    using namespace minilang;
+
+    if (auto* p = dynamic_cast<ProgramNode*>(node)) {
+        for (StmtNode* s : p->statements) buildSymbolTablePrePass(s, table);
+    } else if (auto* b = dynamic_cast<BlockNode*>(node)) {
+        table.enterScope();
+        for (StmtNode* s : b->statements) buildSymbolTablePrePass(s, table);
+        table.exitScope();
+    } else if (auto* d = dynamic_cast<DeclarationNode*>(node)) {
+        Symbol sym;
+        sym.name         = d->name;
+        sym.type         = d->declType;
+        sym.scopeLevel   = table.currentLevel();
+        sym.declaredLine = d->loc.line;
+        sym.initialized  = false;
+        table.insert(sym);
+    } else if (auto* i = dynamic_cast<IfNode*>(node)) {
+        buildSymbolTablePrePass(i->thenBranch, table);
+        if (i->elseBranch) buildSymbolTablePrePass(i->elseBranch, table);
+    } else if (auto* w = dynamic_cast<WhileNode*>(node)) {
+        buildSymbolTablePrePass(w->body, table);
+    }
+}
+
 int runCompile(const Options& opts, minilang::ErrorReporter& reporter) {
     minilang::ProgramNode* ast = nullptr;
     yyparse(&ast);
@@ -106,13 +116,23 @@ int runCompile(const Options& opts, minilang::ErrorReporter& reporter) {
         printer.print(*ast);
     }
 
+    minilang::SymbolTable table;
+    if (ast != nullptr) {
+        buildSymbolTablePrePass(ast, table);
+    }
+
+    if (opts.symtab && ast != nullptr) {
+        minilang::SymbolTablePrinter stp(std::cout);
+        stp.print(table);
+    }
+
     int exitCode = 0;
     if (reporter.hasErrors()) {
         reporter.printAll(std::cerr);
         std::cerr << reporter.errorCount() << " error(s) found.\n";
         exitCode = 1;
     } else {
-        std::cout << "Compilation successful: lexical and syntax analysis "
+        std::cout << "\nCompilation successful: lexical and syntax analysis "
                   << "completed with no errors.\n";
     }
 
@@ -120,7 +140,7 @@ int runCompile(const Options& opts, minilang::ErrorReporter& reporter) {
     return exitCode;
 }
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     Options opts;
@@ -131,6 +151,8 @@ int main(int argc, char** argv) {
             opts.tokens = true;
         } else if (arg == "--ast") {
             opts.ast = true;
+        } else if (arg == "--symtab") {
+            opts.symtab = true;
         } else if (arg == "--help") {
             printUsage(argv[0]);
             return 0;
