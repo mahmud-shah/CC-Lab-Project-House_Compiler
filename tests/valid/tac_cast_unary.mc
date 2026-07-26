@@ -1,0 +1,11 @@
+int x;
+float f;
+bool flag;
+x = 7;
+f = x;
+flag = true;
+flag = !flag;
+x = -x;
+print f;
+print flag;
+print x;
