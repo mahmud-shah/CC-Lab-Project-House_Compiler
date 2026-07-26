@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -10,15 +11,19 @@
 #include "minilang/lexer.hpp"
 #include "minilang/semantic_analyzer.hpp"
 #include "minilang/symbol_table_printer.hpp"
+#include "minilang/tac.hpp"
+#include "minilang/tac_generator.hpp"
 #include "parser.tab.hpp"
 
 namespace {
 
 struct Options {
     std::string sourcePath;
+    std::string outputPath;
     bool tokens = false;
     bool ast    = false;
     bool symtab = false;
+    bool tac    = false;
 };
 
 void printUsage(const char* prog) {
@@ -29,6 +34,8 @@ void printUsage(const char* prog) {
         << "  --tokens     print the token stream produced by the lexer\n"
         << "  --ast        print the abstract syntax tree after parsing\n"
         << "  --symtab     print the symbol table after semantic analysis\n"
+        << "  --tac        print three-address code\n"
+        << "  -o <file>    write TAC to <file> (implies --tac)\n"
         << "  --help       show this message\n";
 }
 
@@ -101,6 +108,26 @@ int runCompile(const Options& opts, minilang::ErrorReporter& reporter) {
         stp.print(semantic.symbolTable());
     }
 
+    if (semanticOk && (opts.tac || !opts.outputPath.empty())) {
+        minilang::TACProgram   prog;
+        minilang::TACGenerator gen(prog);
+        gen.generate(*ast);
+
+        if (!opts.outputPath.empty()) {
+            std::ofstream ofs(opts.outputPath);
+            if (!ofs) {
+                std::cerr << "mcc: cannot write to '"
+                          << opts.outputPath << "'\n";
+                delete ast;
+                return 2;
+            }
+            prog.print(ofs, opts.sourcePath);
+            std::cout << "TAC written to: " << opts.outputPath << "\n";
+        } else {
+            prog.print(std::cout, opts.sourcePath);
+        }
+    }
+
     // ---- Diagnostics 
     int exitCode = 0;
     if (reporter.hasErrors()) {
@@ -126,6 +153,14 @@ int main(int argc, char** argv) {
         if      (arg == "--tokens") opts.tokens = true;
         else if (arg == "--ast")    opts.ast    = true;
         else if (arg == "--symtab") opts.symtab = true;
+        else if (arg == "--tac")    opts.tac    = true;
+        else if (arg == "-o") {
+            if (i + 1 >= argc) {
+                std::cerr << "mcc: -o requires a filename\n";
+                return 2;
+            }
+            opts.outputPath = argv[++i];
+        }
         else if (arg == "--help")   { printUsage(argv[0]); return 0; }
         else if (!arg.empty() && arg[0] == '-') {
             std::cerr << "mcc: unknown option '" << arg << "'\n";
