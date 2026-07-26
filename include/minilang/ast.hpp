@@ -7,30 +7,11 @@
 #include "minilang/source_location.hpp"
 #include "minilang/type.hpp"
 
-// ============================================================================
-// Abstract Syntax Tree for MiniLang (Project Manual §4.3)
-//
-// Design:
-//   * Every concrete node models exactly one language construct.
-//   * Two abstract branches split the tree by role:
-//       ExprNode - constructs that produce a value (carry a Type, filled
-//                  in by the semantic analyzer -> the "annotated AST")
-//       StmtNode - constructs executed for effect
-//   * Traversal uses the Visitor pattern: the AST printer, the semantic
-//     analyzer, and the TAC generator are three independent visitors over
-//     one unchanged tree. Adding a new consumer (e.g. a Graphviz printer)
-//     means adding one class here and zero changes to the nodes.
-//   * Ownership: every node owns its children and deletes them in its
-//     destructor; deleting the ProgramNode releases the whole tree.
-// ============================================================================
-
 namespace minilang {
 
 class ASTVisitor;
 
-// ---------------------------------------------------------------------------
 // Operators
-// ---------------------------------------------------------------------------
 
 enum class BinaryOp {
     Add, Sub, Mul, Div, Mod,          // arithmetic  + - * / %
@@ -61,9 +42,7 @@ inline bool isLogical(BinaryOp op) {
     return op == BinaryOp::And || op == BinaryOp::Or;
 }
 
-// ---------------------------------------------------------------------------
 // Base classes
-// ---------------------------------------------------------------------------
 
 class ASTNode {
 public:
@@ -76,9 +55,6 @@ protected:
     explicit ASTNode(SourceLocation l) : loc(l) {}
 };
 
-// A construct that yields a value. `type` starts Unresolved and is filled
-// in by the semantic analyzer, turning the plain AST into the annotated
-// AST that the TAC generator consumes.
 class ExprNode : public ASTNode {
 public:
     Type type = Type::Unresolved;
@@ -87,15 +63,12 @@ protected:
     using ASTNode::ASTNode;
 };
 
-// A construct executed for its effect.
 class StmtNode : public ASTNode {
 protected:
     using ASTNode::ASTNode;
 };
 
-// ---------------------------------------------------------------------------
 // Expressions
-// ---------------------------------------------------------------------------
 
 class IntLiteralNode final : public ExprNode {
 public:
@@ -153,9 +126,7 @@ public:
     void accept(ASTVisitor& v) override;
 };
 
-// ---------------------------------------------------------------------------
 // Statements
-// ---------------------------------------------------------------------------
 
 class DeclarationNode final : public StmtNode {
 public:
@@ -171,6 +142,7 @@ class AssignmentNode final : public StmtNode {
 public:
     std::string name;
     ExprNode*   value;
+    Type        targetType = Type::Unresolved;
 
     AssignmentNode(std::string n, ExprNode* v, SourceLocation l)
         : StmtNode(l), name(std::move(n)), value(v) {}
@@ -228,9 +200,7 @@ public:
     void accept(ASTVisitor& v) override;
 };
 
-// ---------------------------------------------------------------------------
 // Root
-// ---------------------------------------------------------------------------
 
 class ProgramNode final : public ASTNode {
 public:
@@ -243,9 +213,7 @@ public:
     void accept(ASTVisitor& v) override;
 };
 
-// ---------------------------------------------------------------------------
 // Visitor interface - one method per concrete node
-// ---------------------------------------------------------------------------
 
 class ASTVisitor {
 public:
@@ -266,6 +234,6 @@ public:
     virtual void visit(IdentifierNode& n)   = 0;
 };
 
-} // namespace minilang
+} 
 
-#endif // MINILANG_AST_HPP
+#endif 
