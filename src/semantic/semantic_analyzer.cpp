@@ -279,6 +279,7 @@ void SemanticAnalyzer::visit(AssignmentNode& n) {
     }
 
     sym->initialized = true;
+    n.targetType     = lhs;
 }
 
 // ---- If 
