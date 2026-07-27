@@ -38,9 +38,14 @@ $(BIN): $(OBJS)
 	@echo "Built $(BIN)"
 
 
+# $(BUILD)/obj/%.o: src/%.cpp $(PARSER_GEN_H)
+# 	@mkdir -p $(dir $@)
+# 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 $(BUILD)/obj/%.o: src/%.cpp $(PARSER_GEN_H)
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
+-include $(OBJS:.o=.d)
 
 $(PARSER_GEN_C) $(PARSER_GEN_H) &: $(PARSER_Y)
 	@mkdir -p $(dir $@)
