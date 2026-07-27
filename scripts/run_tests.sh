@@ -1,42 +1,55 @@
-#!/usr/bin/env bash
-# ============================================================================
-# MiniLang regression runner.
-#   - valid programs must exit 0 and produce no diagnostics
-#   - invalid programs must exit 1 and their diagnostics must match the
-#     frozen golden output in the sibling expected/ directory
-# Grows automatically as test files are added; no registration needed.
-# ============================================================================
 set -u
 MCC=build/mcc
 pass=0; fail=0
 
-check() {  # $1 = description, $2 = ok flag (0 ok)
-  if [ "$2" -eq 0 ]; then pass=$((pass+1)); printf 'PASS  %s\n' "$1"
-  else fail=$((fail+1)); printf 'FAIL  %s\n' "$1"; fi
+check() {
+    if [ "$2" -eq 0 ]; then
+        pass=$((pass+1)); printf 'PASS  %s\n' "$1"
+    else
+        fail=$((fail+1)); printf 'FAIL  %s\n' "$1"
+    fi
 }
 
+# Valid programs:
 for f in tests/valid/*.mc examples/*.mc; do
-  [ -e "$f" ] || continue
-  "$MCC" "$f" > /dev/null 2> /tmp/err.$$
-  ok=$?
-  [ -s /tmp/err.$$ ] && ok=1
-  check "valid    $f (exit 0, no diagnostics)" $ok
+    [ -e "$f" ] || continue
+    "$MCC" "$f" > /dev/null 2> /tmp/err.$$
+    ok=$?
+    [ -s /tmp/err.$$ ] && ok=1
+    check "valid    $f" $ok
 done
 
+# Invalid programs:
 for dir in tests/invalid/lexical tests/invalid/syntax tests/invalid/semantic; do
-  for f in "$dir"/*.mc; do
+    for f in "$dir"/*.mc; do
+        [ -e "$f" ] || continue
+        base=$(basename "$f" .mc)
+        golden="$dir/expected/$base.err"
+        "$MCC" "$f" > /dev/null 2> /tmp/err.$$
+        rc=$?
+        ok=1
+        if [ $rc -eq 1 ] && [ -f "$golden" ] && \
+           diff -q /tmp/err.$$ "$golden" > /dev/null 2>&1; then
+            ok=0
+        fi
+        check "invalid  $f" $ok
+    done
+done
+
+# TAC golden output check
+for f in tests/valid/tac_*.mc; do
     [ -e "$f" ] || continue
     base=$(basename "$f" .mc)
-    golden="$dir/expected/$base.err"
-    "$MCC" "$f" > /dev/null 2> /tmp/err.$$
-    rc=$?
+    golden="tests/valid/expected/$base.tac"
+    "$MCC" "$f" --tac > /tmp/tac.$$ 2>/dev/null
     ok=1
-    if [ $rc -eq 1 ] && [ -f "$golden" ] && diff -q /tmp/err.$$ "$golden" > /dev/null; then ok=0; fi
-    check "invalid  $f (exit 1, diagnostics match golden)" $ok
-  done
+    if [ -f "$golden" ] && diff -q /tmp/tac.$$ "$golden" > /dev/null 2>&1; then
+        ok=0
+    fi
+    check "tac      $f" $ok
 done
 
-rm -f /tmp/err.$$
+rm -f /tmp/err.$$ /tmp/tac.$$
 echo "----------------------------------------"
 echo "$pass passed, $fail failed"
 [ $fail -eq 0 ]
