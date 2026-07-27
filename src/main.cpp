@@ -31,14 +31,15 @@ void printUsage(const char* prog) {
         << "MiniLang Compiler (mcc)\n"
         << "Usage: " << prog << " <source-file> [options]\n\n"
         << "Options:\n"
-        << "  --tokens     print the token stream produced by the lexer\n"
-        << "  --ast        print the abstract syntax tree after parsing\n"
-        << "  --symtab     print the symbol table after semantic analysis\n"
-        << "  --tac        print three-address code\n"
+        << "  --tokens     print the token stream\n"
+        << "  --ast        print the abstract syntax tree\n"
+        << "  --symtab     print the symbol table\n"
+        << "  --tac        print Three Address Code\n"
         << "  -o <file>    write TAC to <file> (implies --tac)\n"
         << "  --help       show this message\n";
 }
 
+// Token dump mode (--tokens)
 int runTokenDump(minilang::ErrorReporter& reporter) {
     std::cout << std::left
               << std::setw(10) << "LOC"
@@ -84,11 +85,13 @@ int runTokenDump(minilang::ErrorReporter& reporter) {
     return reporter.hasErrors() ? 1 : 0;
 }
 
+// Full compilation pipeline
 int runCompile(const Options& opts, minilang::ErrorReporter& reporter) {
 
     minilang::ProgramNode* ast = nullptr;
     yyparse(&ast);
 
+    // --ast mode
     if (opts.ast && ast != nullptr) {
         minilang::ASTPrinter printer(std::cout);
         printer.print(*ast);
@@ -98,26 +101,25 @@ int runCompile(const Options& opts, minilang::ErrorReporter& reporter) {
     minilang::SemanticAnalyzer semantic(reporter);
     bool semanticOk = false;
 
-    if (ast != nullptr && !reporter.hasErrors()) {
+    if (ast != nullptr && !reporter.hasErrors())
         semanticOk = semantic.analyze(*ast);
-    }
 
-
+    // --symtab mode
     if (opts.symtab && ast != nullptr) {
         minilang::SymbolTablePrinter stp(std::cout);
         stp.print(semantic.symbolTable());
     }
 
     if (semanticOk && (opts.tac || !opts.outputPath.empty())) {
-        minilang::TACProgram   prog;
-        minilang::TACGenerator gen(prog);
+        minilang::TACProgram    prog;
+        minilang::TACGenerator  gen(prog);
         gen.generate(*ast);
 
         if (!opts.outputPath.empty()) {
+            // Write to file (-o mode)
             std::ofstream ofs(opts.outputPath);
             if (!ofs) {
-                std::cerr << "mcc: cannot write to '"
-                          << opts.outputPath << "'\n";
+                std::cerr << "mcc: cannot write to '" << opts.outputPath << "'\n";
                 delete ast;
                 return 2;
             }
@@ -128,15 +130,15 @@ int runCompile(const Options& opts, minilang::ErrorReporter& reporter) {
         }
     }
 
-    // ---- Diagnostics 
+    // Diagnostics and exit code
     int exitCode = 0;
     if (reporter.hasErrors()) {
         reporter.printAll(std::cerr);
         std::cerr << reporter.errorCount() << " error(s) found.\n";
         exitCode = 1;
     } else {
-        std::cout << "Compilation successful.\n";
-        (void)semanticOk; 
+        if (!opts.tac && opts.outputPath.empty())
+            std::cout << "Compilation successful.\n";
     }
 
     delete ast;
@@ -160,9 +162,10 @@ int main(int argc, char** argv) {
                 return 2;
             }
             opts.outputPath = argv[++i];
-        }
-        else if (arg == "--help")   { printUsage(argv[0]); return 0; }
-        else if (!arg.empty() && arg[0] == '-') {
+        } else if (arg == "--help") {
+            printUsage(argv[0]);
+            return 0;
+        } else if (!arg.empty() && arg[0] == '-') {
             std::cerr << "mcc: unknown option '" << arg << "'\n";
             printUsage(argv[0]);
             return 2;
