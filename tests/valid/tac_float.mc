@@ -1,0 +1,12 @@
+float x;
+float y;
+int n;
+float result;
+n = 4;
+x = 3.14;
+y = 2.71;
+result = x + y;
+result = result * x;
+x = n;
+print result;
+print x;
