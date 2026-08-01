@@ -1,460 +1,558 @@
-# Compiler Construction Lab Project
+# MiniLang Compiler
 
-### Design and Implement a Mini Programming Language Compiler using Flex and Bison
+A complete compiler front-end for a custom programming language called
+**MiniLang**, built using **Flex**, **Bison**, and **C++17** as part of the
+Compiler Construction Lab project.
 
-Department of Computer Science and Engineering
-Metropolitan University, Bangladesh
+**Course:** Compiler Construction Lab
+**Institution:** Department of Computer Science and Engineering, Metropolitan University, Bangladesh
+**Developer:** Al Mahmud
 
 ---
 
-Welcome to the official repository for the **Compiler Construction Lab Project**!
+## Table of Contents
 
-This repository serves as the **official project template and instruction repository** for the Compiler Construction Laboratory course.
+- [Project Overview](#project-overview)
+- [Language Summary](#language-summary)
+- [Compiler Pipeline](#compiler-pipeline)
+- [Project Structure](#project-structure)
+- [Technology Stack](#technology-stack)
+- [Build Instructions](#build-instructions)
+- [Usage and Execution](#usage-and-execution)
+- [Compiler Phases](#compiler-phases)
+- [Error Handling](#error-handling)
+- [Testing](#testing)
+- [Examples](#examples)
+- [Limitations](#limitations)
+- [Future Work](#future-work)
 
-Every project group **must fork this repository** and complete the entire project inside their own GitHub repository. This repository is provided only as a project template to help you organize your work. It does not contain the implementation of any required compiler phase. Every group is responsible for designing and implementing their own solution.
+---
 
+## Project Overview
 
+This project implements a complete compiler front-end with intermediate code
+generation for a custom mini programming language. The compiler reads source
+files and passes them through six integrated phases:
 
-# Important Notice
+1. **Lexical Analysis** — tokenises the source using Flex
+2. **Syntax Analysis** — parses tokens using a Bison grammar
+3. **AST Construction** — builds an Abstract Syntax Tree during parsing
+4. **Symbol Table** — tracks all declared identifiers and their scopes
+5. **Semantic Analysis** — enforces all type and scope rules
+6. **TAC Generation** — produces Three Address Code intermediate output
 
-This repository **does not contain the project solution**.
+---
 
-It only contains:
+## Language Summary
 
-* Project instructions
-* Project manual
-* Repository guidelines
-* GitHub workflow
-* Required directory structure
-* Submission instructions
+MiniLang supports three data types and six categories of statements.
 
-The complete project specification is provided in:
+### Data Types
 
-> **Compiler Construction Lab Project Manual.pdf**
+| Type | Description |
+|---|---|
+| `int` | Signed integer |
+| `float` | Floating-point number |
+| `bool` | Boolean (`true` / `false`) |
 
-Read the project manual carefully before starting the implementation.
-
-
-
-# Project Objective
-
-The objective of this project is to design and implement a compiler front-end for a custom programming language using:
-
-* Flex
-* Bison
-* C/C++
-* Linux
-* Make
-* Git
-* GitHub
-
-The project integrates the major phases of compiler construction into one complete software system.
-
-Your compiler must implement:
-
-* Lexical Analysis
-* Syntax Analysis
-* Abstract Syntax Tree (AST)
-* Symbol Table
-* Semantic Analysis
-* Intermediate Code Generation (Three Address Code)
-
-Refer to the Project Manual for the complete language specification and implementation requirements.
-
-
-
-# Repository Workflow
-
-Every project group must strictly follow the workflow below.
+### Statements
 
 ```
-Instructor Repository
-        │
-        ▼
-Fork Repository
-        │
-        ▼
-Student Group Repository
-        │
-        ▼
-Regular Development
-        │
-        ▼
-GitHub Repository Submission
+int x;              // variable declaration
+x = 5;              // assignment
+print x;            // print
+if (x > 0) { }     // if
+if (x > 0) { }     // if-else
+else { }
+while (x > 0) { }  // while loop
+{ }                 // nested block (creates new scope)
 ```
 
-Students **must not develop directly inside this repository.**
+### Operators
 
+| Category | Operators |
+|---|---|
+| Arithmetic | `+` `-` `*` `/` `%` |
+| Relational | `<` `>` `<=` `>=` `==` `!=` |
+| Logical | `&&` `\|\|` `!` |
 
+### Sample Program
 
-# Step 1: Fork This Repository
+```
+int x;
+int y;
+bool flag;
+x = 10;
+y = 0;
+flag = true;
+while (x > 0) {
+    y = y + x;
+    x = x - 1;
+}
+if (flag == true) {
+    print y;
+} else {
+    print x;
+}
+```
 
-Click the **Fork** button located at the top-right corner of this repository.
+---
 
-This will create your own copy of the repository under your GitHub account.
+## Compiler Pipeline
 
-Each group must maintain its own repository.
+```
+Source Code (.mc)
+      |
+      v
++------------------+
+|  Lexical Analyzer | (Flex)
+|  lexer.l         |
++------------------+
+      | Token Stream
+      v
++------------------+
+|  Syntax Analyzer | (Bison)
+|  parser.y        |
++------------------+
+      | Abstract Syntax Tree
+      v
++------------------+
+|  Semantic        | (Visitor Pattern)
+|  Analyzer        |----> Symbol Table
+|  + Type Checker  |
++------------------+
+      | Annotated AST
+      v
++------------------+
+|  TAC Generator   | (Visitor Pattern)
++------------------+
+      | Three Address Code
+      v
+   Output (.tac)
+```
 
-Do **NOT** request write access to the instructor repository.
+---
 
+## Project Structure
 
+```
+CC-Lab-Project-House_Compiler/
+├── docs/
+│   ├── design/              Architecture and design decisions
+│   ├── grammar/             Formal CFG specification
+│   └── viva/                Viva preparation notes
+├── include/
+│   └── minilang/            All public header files
+│       ├── ast.hpp          AST node hierarchy
+│       ├── ast_printer.hpp  AST text printer
+│       ├── error_reporter.hpp Diagnostic collector
+│       ├── lexer.hpp        Lexer interface
+│       ├── semantic_analyzer.hpp
+│       ├── source_location.hpp
+│       ├── symbol_table.hpp
+│       ├── symbol_table_printer.hpp
+│       ├── tac.hpp          TAC instruction set
+│       ├── tac_generator.hpp
+│       └── type.hpp         Type system
+├── src/
+│   ├── ast/                 AST node implementations
+│   ├── common/              Shared utilities (ErrorReporter, token names)
+│   ├── lexer/               lexer.l (Flex specification)
+│   ├── parser/              parser.y (Bison grammar)
+│   ├── semantic/            Semantic analyzer visitor
+│   ├── symbol_table/        Symbol table and printer
+│   ├── tac/                 TAC generator and printer
+│   └── main.cpp             Compiler driver / CLI
+├── examples/                Representative sample programs
+├── tests/
+│   ├── valid/               Valid programs with golden TAC outputs
+│   ├── invalid/
+│   │   ├── lexical/         Lexical error programs
+│   │   ├── syntax/          Syntax error programs
+│   │   └── semantic/        Semantic error programs
+│   └── README.md            Test suite documentation
+├── scripts/
+│   └── run_tests.sh         Regression test runner
+├── Makefile                 Build system
+├── .gitignore
+└── README.md
+```
 
-# Step 2: Clone Your Own Repository
+---
 
-Clone **your fork**, not the instructor repository.
+## Technology Stack
 
-Example:
+| Tool | Purpose |
+|---|---|
+| Linux (Ubuntu 24.04) | Development and build environment |
+| Flex 2.6.4 | Lexical analyzer generator |
+| Bison 3.8.2 | Parser generator |
+| g++ (GCC, C++17) | Compiler for generated and hand-written code |
+| GNU Make | Build automation |
+| Git / GitHub | Version control |
+
+---
+
+## Build Instructions
+
+### Prerequisites
+
+Install the required tools on Ubuntu or Debian:
 
 ```bash
-git clone https://github.com/your-username/your-repository.git
-cd your-repository
+sudo apt update
+sudo apt install -y build-essential flex bison git make
 ```
 
+Verify installation:
 
-
-# Step 3: Rename Your Repository
-
-Rename your repository using the following format:
-
-```
-CC-Lab-Project-GroupName
-```
-
-
-
-# Step 4: Add Team Members
-
-Every member of the project group must be added as a collaborator.
-
-GitHub
-
-Settings
-
-↓
-
-Collaborators
-
-↓
-
-Add Collaborator
-
-Every member should contribute through their own GitHub account.
-
-
-
-# Step 5: Repository Visibility
-
-Keep your repository **Public** until the evaluation process has been completed.
-
-Do not delete your repository after submission.
-
-
-
-# Project Directory Structure
-
-Your repository should approximately follow the following structure.
-
-```
-project-root/
-
-├── docs/
-│
-├── src/
-│   ├── lexer/
-│   ├── parser/
-│   ├── ast/
-│   ├── semantic/
-│   └── symbol_table/
-│
-├── tests/
-│
-├── examples/
-│
-├── Makefile
-│
-├── README.md
-│
-└── Project Report.pdf
+```bash
+g++ --version
+flex --version
+bison --version
+make --version
 ```
 
-You may organize your source code further if necessary, but the overall structure should remain clean and professional.
+### Build
 
+Clone the repository and build with a single command:
 
-
-# Required Compiler Modules
-
-Your compiler must include the following components.
-
-## Lexical Analyzer
-
-* Token recognition
-* Keywords
-* Identifiers
-* Constants
-* Operators
-* Delimiters
-* Comment handling
-* Lexical error reporting
-
-
-
-## Syntax Analyzer
-
-* Complete CFG implementation
-* Parsing using Bison
-* Syntax error detection
-* Basic error recovery
-
-
-
-## Abstract Syntax Tree
-
-* Build AST during parsing
-* Meaningful node hierarchy
-* AST visualization or printing
-
-
-## Symbol Table
-
-* Variable declarations
-* Nested scopes
-* Identifier lookup
-* Scope management
-
-
-## Semantic Analyzer
-
-Your compiler must detect semantic errors including:
-
-* Undeclared variables
-* Redeclaration
-* Scope violations
-* Type mismatch
-* Invalid assignments
-* Invalid expressions
-
-
-## Intermediate Code Generation
-
-Generate Three Address Code (TAC).
-
-Support:
-
-* Arithmetic expressions
-* Relational expressions
-* Logical expressions
-* Assignment statements
-* if
-* if-else
-* while
-* print
-
-
-# Git Commit Policy
-
-GitHub activity will be considered during evaluation.
-
-Every student is expected to contribute throughout the semester.
-
-Avoid uploading the entire project at the end.
-
-Commit regularly.
-
-Good commit messages:
-
-```
-Add lexer rules for keywords
-
-Implement parser grammar
-
-Create AST node hierarchy
-
-Implement symbol table lookup
-
-Add semantic type checking
-
-Generate TAC for arithmetic expressions
-
-Fix parser conflicts
-
-Improve syntax error recovery
+```bash
+git clone git@github.com:YOUR-USERNAME/CC-Lab-Project-House_Compiler.git
+cd CC-Lab-Project-House_Compiler
+make
 ```
 
-Avoid commit messages like:
+Expected output:
 
 ```
-update
-
-new
-
-code
-
-final
-
-fix
-
-project
+bison ...
+g++ ... src/main.cpp ...
+...
+Built build/mcc
 ```
 
-Meaningful commit history reflects professional software development practices.
+The compiler binary is produced at `build/mcc`.
 
+### Clean
 
-# Branching (Recommended)
-
-You may either:
-
-* work directly on the main branch
-
-or
-
-* create feature branches
-
-Example
-
-```
-feature/lexer
-
-feature/parser
-
-feature/semantic
-
-feature/tac
+```bash
+make clean
 ```
 
-Merge feature branches into `main` after testing.
+### Run Tests
 
+```bash
+make test
+```
 
-# .gitignore
+Expected output:
 
-A `.gitignore` file is included to prevent generated and temporary files from being tracked by Git.
-
-Examples include:
-
-* Flex generated files
-* Bison generated files
-* Object files
-* Executables
-* IDE configuration files
-* Temporary files
-* Log files
-
-Do not remove the `.gitignore` file.
-
-
-# Coding Guidelines
-
-Write clean and readable code.
-
-Use
-
-* meaningful variable names
-* proper indentation
-* modular design
-* comments where appropriate
-
-Avoid
-
-* unnecessary global variables
-* duplicated code
-* magic numbers
-* excessively long functions
-
-
-# Test Suite
-
-This directory contains sample test programs for the compiler.
-
-- `valid/` contains programs that should compile successfully and produce valid output.
-- `invalid/` contains programs that intentionally violate lexical, syntactic, or semantic rules. Your compiler should detect and report these errors with clear diagnostic messages where possible.
-
-These files are provided as examples only. You are expected to develop additional test cases to thoroughly validate your compiler.
-
-
-# AI Usage Policy
-
-Artificial Intelligence tools are permitted.
-
-Examples include:
-
-* ChatGPT
-* GitHub Copilot
-* Claude
-* Gemini
-
-However,
-
-Every student is expected to fully understand every submitted line of code.
-
-During demonstration and viva, any group member may be asked to explain any part of the implementation.
-
-Failure to explain the implementation may result in mark deductions regardless of whether the compiler functions correctly.
-
-
-# Academic Integrity
-
-The submitted work must be original.
-
-Do not
-
-* copy another group's implementation
-* reuse previous semesters' projects
-* submit downloaded compiler implementations
-
-External resources may be used for learning purposes, but all references must be properly acknowledged where appropriate.
-
-
-# Submission
-
-Submit your:
-
-* GitHub Repository Link
-
-<!-- No ZIP archive should be submitted unless explicitly requested. -->
-
-The submitted repository must include:
-
-* Source Code
-* README
-* Project Report
-* Test Programs
-* Example Programs
-* Build Instructions
-* Execution Instructions
-
-
-# Evaluation
-
-Your project may be evaluated based on:
-
-* Correctness
-* Code quality
-* Documentation
-* GitHub activity
-* Demonstration
-* Presentation
-* Group Viva
-
-A working project alone does not guarantee full marks.
-
-Understanding your implementation is equally important.
-
-
-# Deadline
-
-Refer to the **Compiler Construction Lab Project Manual.pdf** for the official submission deadline.
-
-Late submissions may receive penalties according to the course policy.
+```
+PASS  valid    tests/valid/tac_complete.mc
+PASS  valid    examples/sample.mc
+...
+42 passed, 0 failed
+```
 
 ---
 
-If you have any questions regarding the project specification, contact the instructor **before** the submission deadline.
+## Usage and Execution
 
-Please avoid waiting until the last moment to seek clarification.
+### Basic syntax
+
+```bash
+./build/mcc <source-file> [options]
+```
+
+### Options
+
+| Option | Description |
+|---|---|
+| `--tokens` | Print the token stream produced by the lexer |
+| `--ast` | Print the Abstract Syntax Tree after parsing |
+| `--symtab` | Print the symbol table after semantic analysis |
+| `--tac` | Print Three Address Code to stdout |
+| `-o <file>` | Write TAC to a file |
+| `--help` | Show usage information |
+
+### Execution Examples
+
+**Full pipeline — compile a source file:**
+
+```bash
+./build/mcc examples/sample.mc
+```
+
+Output:
+```
+Compilation successful.
+```
+
+**Dump the token stream:**
+
+```bash
+./build/mcc examples/sample.mc --tokens
+```
+
+Output:
+```
+LOC       TOKEN           LEXEME          VALUE
+----------------------------------------------------
+2:1       KEYWORD_INT     int
+2:5       IDENTIFIER      x               "x"
+2:6       SEMICOLON       ;
+...
+```
+
+**Print the Abstract Syntax Tree:**
+
+```bash
+./build/mcc examples/sample.mc --ast
+```
+
+Output:
+```
+Program  [1:1]
+  Declaration 'x' : int  [2:5]
+  Declaration 'y' : int  [3:5]
+  Declaration 'flag' : bool  [4:6]
+  Assignment 'x'  [6:1]
+    IntLiteral 10  [6:5]
+  ...
+```
+
+**Print the symbol table:**
+
+```bash
+./build/mcc examples/sample.mc --symtab
+```
+
+Output:
+```
+=== Symbol Table ===
+
+Scope Level 0 (global)
+--------------------------------------------------
+NAME        TYPE    SCOPE  LINE  INITIALIZED
+x           int     0      2     yes
+y           int     0      3     yes
+flag        bool    0      4     yes
+```
+
+**Generate Three Address Code:**
+
+```bash
+./build/mcc examples/sample.mc --tac
+```
+
+Output:
+```
+; === Three Address Code: examples/sample.mc ===
+
+    x = 10
+    y = 0
+    flag = true
+L1:
+    t1 = x > 0
+    ifFalse t1 goto L2
+    t2 = y + x
+    y = t2
+    t3 = x - 1
+    x = t3
+    goto L1
+L2:
+    t4 = flag == true
+    ifFalse t4 goto L3
+    print y
+    goto L4
+L3:
+    print x
+L4:
+```
+
+**Write TAC to a file:**
+
+```bash
+./build/mcc examples/sample.mc -o output.tac
+cat output.tac
+```
 
 ---
 
-This project is intended to integrate everything you have learned throughout the Compiler Construction Laboratory course.
+## Compiler Phases
 
-Plan your work, collaborate effectively, commit regularly, and write clean, maintainable code.
+### Phase 1 — Lexical Analyzer (`src/lexer/lexer.l`)
 
-Happy Coding!
+The Flex-based scanner reads the source character by character and groups
+characters into tokens. It tracks line and column numbers for every token
+so all error messages can point to the exact position in the source.
+
+Supported token classes:
+- **Keywords:** `int` `float` `bool` `if` `else` `while` `print` `true` `false`
+- **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`
+- **Integer literals:** `[0-9]+`
+- **Float literals:** `[0-9]+.[0-9]+`
+- **All 15 operators** including multi-character tokens (`<=`, `>=`, `==`, `!=`, `&&`, `||`)
+- **Delimiters:** `{ } ( ) ;`
+- **Comments:** `//` line comments and `/* */` block comments are discarded
+- **Invalid tokens** are reported with line and column and scanning continues
+
+### Phase 2 — Syntax Analyzer (`src/parser/parser.y`)
+
+The Bison-based parser implements a complete, unambiguous context-free grammar
+for MiniLang. Operator precedence and associativity are declared explicitly,
+producing zero shift/reduce and zero reduce/reduce conflicts.
+
+Key design decisions:
+- **Dangling else** resolved by `%precedence` declarations (else binds to nearest if)
+- **Error recovery** at `;` and `}` so one syntax error never hides the rest of the file
+
+### Phase 3 — Abstract Syntax Tree (`src/ast/`)
+
+The AST is built bottom-up during parsing. Each node represents exactly one
+language construct:
+
+`ProgramNode` → `BlockNode` → `DeclarationNode` `AssignmentNode` `IfNode`
+`WhileNode` `PrintNode` → `BinaryExprNode` `UnaryExprNode` → `IntLiteralNode`
+`FloatLiteralNode` `BoolLiteralNode` `IdentifierNode`
+
+Three independent visitors walk the same tree: `ASTPrinter`,
+`SemanticAnalyzer`, and `TACGenerator`.
+
+### Phase 4 — Symbol Table (`src/symbol_table/`)
+
+Implemented as a stack of hash maps — one map per active scope.
+`enterScope()` pushes a new map; `exitScope()` pops and archives it.
+Lookup walks the stack from innermost to outermost scope so inner
+declarations correctly shadow outer ones.
+
+Each symbol stores: name, type, scope level, declared line, initialized flag.
+
+### Phase 5 — Semantic Analyzer (`src/semantic/`)
+
+The semantic analyzer walks the annotated AST and enforces all rules the
+grammar cannot check. It reports every error in the file without stopping
+at the first one.
+
+| Error Class | Example |
+|---|---|
+| Undeclared variable | Using `x` before `int x;` |
+| Redeclaration | `int x; int x;` in the same scope |
+| Scope violation | Using a variable after its block closes |
+| Type mismatch | `bool b = 5;` |
+| Invalid assignment | `int x = 3.14;` |
+| Invalid expression | `true + 1` or `1 && 2` |
+| Invalid condition | `if (x)` where `x` is `int` |
+
+### Phase 6 — TAC Generator (`src/tac/`)
+
+Generates Three Address Code by visiting the type-annotated AST. Each
+instruction has at most three operands. Temporary variables (`t1`, `t2`, ...)
+and labels (`L1`, `L2`, ...) are allocated sequentially.
+
+Special handling:
+- `&&` and `||` use **short-circuit jump chains** — the right operand is
+  skipped when the left operand determines the result
+- `int` assigned to a `float` variable emits an explicit `(float)` cast
+- Declarations produce no TAC — variables are handled by the back-end
+
+---
+
+## Error Handling
+
+All three error categories produce messages in a uniform format:
+
+```
+<Category> Error [line L, col C]: <what happened>
+  --> hint: <possible fix>
+```
+
+### Lexical error example
+
+```
+Lexical Error [line 3, col 1]: Invalid token '@'
+  --> hint: this character is not part of the MiniLang alphabet
+```
+
+### Syntax error example
+
+```
+Syntax Error [line 2, col 1]: Unexpected identifier, expecting ';'
+  --> hint: a semicolon may be missing at the end of the previous statement
+```
+
+### Semantic error example
+
+```
+Semantic Error [line 3, col 7]: Undeclared variable 'y'
+  --> hint: declare it before use, e.g. 'int y;'
+```
+
+---
+
+## Testing
+
+The test suite contains **42 test programs** covering every requirement
+from Project Manual §15.
+
+```bash
+make test
+```
+
+| Category | Count | What is tested |
+|---|---|---|
+| Valid programs | 14 | Full pipeline to TAC, all language features |
+| Lexical errors | 4 | Invalid tokens, malformed numbers, unterminated comment |
+| Syntax errors | 4 | Missing semicolon, unbalanced parenthesis, stray else, multiple errors |
+| Semantic errors | 9 | One test per error class, plus multi-error recovery |
+| **Total** | **42** | |
+
+Every invalid test is paired with a golden `.err` file.
+Every TAC test is paired with a golden `.tac` file.
+The runner diffs actual output against golden files and prints `PASS`/`FAIL`.
+
+See `tests/README.md` for the full test catalogue.
+
+---
+
+## Examples
+
+The `examples/` directory contains representative programs:
+
+| File | Demonstrates |
+|---|---|
+| `sample.mc` | All statement types, while loop, if-else (Project Manual §5.5) |
+
+Run any example through the full pipeline:
+
+```bash
+./build/mcc examples/sample.mc --tac
+```
+
+---
+
+## Limitations
+
+- TAC is the final output. No assembly, machine code, or executable is generated
+  (explicitly out of scope per Project Manual §6).
+- No function definitions, arrays, or for/do-while loops in the base language
+  (these are optional bonus features per §14).
+- Integer division truncates toward zero (standard C semantics).
+- The `%` operator requires both operands to be `int`.
+
+---
+
+## Future Work
+
+Optional bonus features from Project Manual §14 that can be added after the
+mandatory requirements are complete:
+
+- Arrays
+- Functions with parameters and return statements
+- `for` loop and `do-while` loop
+- `switch-case`
+- Unary increment/decrement operators (`++` `--`)
+- Constant folding optimization
+- Dead code elimination
+- AST visualization with Graphviz
