@@ -11,9 +11,11 @@ class PipelineStrip(tk.Frame):
     """Compact, color-coded view of the required compiler phases."""
 
     PHASES = (
-        ("lexer", "Lexer"),
-        ("parser", "Parser / AST"),
-        ("semantic", "Semantic / Symbols"),
+        ("lexer", "Lexical"),
+        ("parser", "Syntax"),
+        ("ast", "AST"),
+        ("symtab", "Symbols"),
+        ("semantic", "Semantic"),
         ("tac", "TAC"),
     )
     STATE_COLORS = {
