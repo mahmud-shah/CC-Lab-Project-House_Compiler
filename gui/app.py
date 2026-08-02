@@ -21,7 +21,10 @@ from .output_views import (
     TACTableView,
     TokenTableView,
 )
+from .settings import AppSettings, SettingsStore
 from .test_catalog import TestCase, TestCatalog
+from .test_dashboard import TestDashboard
+from .test_runner import RegressionSuiteRunner, SuiteSummary, TestResult
 from .theme import COLORS, ThemeFonts, apply_theme
 from .widgets import OutputView, PipelineStrip
 
@@ -70,6 +73,8 @@ class MiniLangIDE(tk.Tk):
         self.project_root = runner.project_root
         self.fonts: ThemeFonts = apply_theme(self)
         self.catalog = TestCatalog(self.project_root)
+        self.settings_store = SettingsStore()
+        self.saved_settings = self.settings_store.load()
 
         self.current_file: Path | None = None
         self.source_label = "Untitled.mc"
@@ -80,9 +85,10 @@ class MiniLangIDE(tk.Tk):
         self._work_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._tree_cases: dict[str, TestCase] = {}
         self._action_buttons: list[ttk.Button] = []
+        self._test_cancel_event: threading.Event | None = None
 
         self.title(APP_NAME)
-        self.geometry("1560x920")
+        self.geometry(self.saved_settings.geometry)
         self.minsize(1120, 700)
         self.configure(background=COLORS.background)
         self.protocol("WM_DELETE_WINDOW", self._close_requested)
@@ -95,7 +101,7 @@ class MiniLangIDE(tk.Tk):
         self._refresh_compiler_state()
         self._clear_outputs()
         self.after(80, self._poll_work_queue)
-        self.after_idle(self._set_initial_splitters)
+        self.after_idle(self._restore_layout)
         self.after_idle(self.editor.focus_editor)
 
     # ------------------------------------------------------------------
@@ -149,6 +155,11 @@ class MiniLangIDE(tk.Tk):
         build_menu = tk.Menu(menu_bar)
         build_menu.add_command(label="Build Compiler", accelerator="Ctrl+B", command=self._build_compiler)
         build_menu.add_command(label="Run Full Pipeline", accelerator="F5", command=self._run_pipeline)
+        build_menu.add_command(
+            label="Run Regression Suite",
+            accelerator="Ctrl+T",
+            command=self._run_test_suite,
+        )
         build_menu.add_separator()
         build_menu.add_command(label="Lexical Analysis", accelerator="Ctrl+1", command=lambda: self._run_mode("tokens"))
         build_menu.add_command(label="Parser / AST", accelerator="Ctrl+2", command=lambda: self._run_mode("ast"))
@@ -245,6 +256,13 @@ class MiniLangIDE(tk.Tk):
             style="Toolbar.TButton",
         )
         clear_button.pack(side="left", padx=(0, 6))
+        tests_button = ttk.Button(
+            toolbar,
+            text="Run All 42 Tests",
+            command=self._run_test_suite,
+            style="Toolbar.TButton",
+        )
+        tests_button.pack(side="left", padx=(0, 6))
         load_button = ttk.Button(
             toolbar,
             text="Load Selected Test",
@@ -252,7 +270,7 @@ class MiniLangIDE(tk.Tk):
             style="Toolbar.TButton",
         )
         load_button.pack(side="left")
-        self._action_buttons.extend((build_button, run_button, load_button))
+        self._action_buttons.extend((build_button, run_button, tests_button, load_button))
 
         ttk.Label(
             toolbar,
@@ -398,6 +416,19 @@ class MiniLangIDE(tk.Tk):
         self.output_notebook.add(build_view, text="Build Log")
         self.output_views["build"] = build_view
 
+        console_view = OutputView(self.output_notebook, self.fonts)
+        self.output_notebook.add(console_view, text="Session Console")
+        self.output_views["console"] = console_view
+
+        self.test_dashboard = TestDashboard(
+            self.output_notebook,
+            self.fonts,
+            on_run=self._run_test_suite,
+            on_cancel=self._cancel_test_suite,
+            on_open_source=self._open_test_result,
+        )
+        self.output_notebook.add(self.test_dashboard, text="Test Suite")
+
         token_view = TokenTableView(
             self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
         )
@@ -529,6 +560,31 @@ class MiniLangIDE(tk.Tk):
         self.path_heading.set(f"Read-only copy from {case.relative_path}")
         self._show_expected_output(case)
         self.compiler_status.set(f"Loaded {case.relative_path}")
+
+    def _open_test_result(self, result: TestResult) -> None:
+        result_path = result.source_path.resolve()
+        for case in self.catalog.cases:
+            if case.source_path.resolve() == result_path:
+                self._load_test_case(case)
+                return
+        if not self._confirm_discard_changes():
+            return
+        try:
+            content = result.source_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            messagebox.showerror(
+                "Load failed", f"Could not read {result.source_path}:\n\n{exc}"
+            )
+            return
+        self.current_test = None
+        self._set_editor_content(
+            content,
+            file_path=None,
+            source_label=f"Test: {result.name}",
+            dirty=False,
+        )
+        self.path_heading.set(f"Read-only copy from {result.name}")
+        self.compiler_status.set(f"Loaded {result.name}")
 
     def _show_expected_output(self, case: TestCase) -> None:
         if case.expected_path is None:
@@ -716,6 +772,7 @@ class MiniLangIDE(tk.Tk):
         if not self._begin_work("Building compiler with make..."):
             return
         self.pipeline.reset()
+        self._log_console("Compiler build started: make")
         self.output_views["build"].set_content(
             f"Working directory: {self.project_root}\nCommand: make\n\n",
             "heading",
@@ -773,6 +830,66 @@ class MiniLangIDE(tk.Tk):
     def _run_mode(self, mode: str) -> None:
         self._start_compilation((mode,))
 
+    def _run_test_suite(self) -> None:
+        if self.is_busy:
+            self.compiler_status.set("Another operation is already running")
+            return
+        if not self._refresh_compiler_state():
+            messagebox.showerror(
+                "Compiler unavailable",
+                "Build the project first, then run the regression suite.\n\n"
+                f"Expected compiler:\n{self.runner.compiler_path}",
+            )
+            return
+
+        suite_runner = RegressionSuiteRunner(
+            self.project_root, self.runner.compiler_path
+        )
+        total = len(suite_runner.specs)
+        if not total:
+            messagebox.showwarning(
+                "No tests found", "The project regression sources could not be discovered."
+            )
+            return
+        if not self._begin_work(f"Running {total} regression checks..."):
+            return
+
+        self._test_cancel_event = threading.Event()
+        self.pipeline.reset()
+        self.test_dashboard.begin(total)
+        self.output_notebook.select(self.test_dashboard)
+        self._log_console(f"Regression suite started ({total} checks).")
+        threading.Thread(
+            target=self._test_suite_worker,
+            args=(suite_runner, self._test_cancel_event),
+            name="minilang-regression-suite",
+            daemon=True,
+        ).start()
+
+    def _test_suite_worker(
+        self,
+        suite_runner: RegressionSuiteRunner,
+        cancel_event: threading.Event,
+    ) -> None:
+        try:
+            summary = suite_runner.run(
+                progress=lambda result, index, total: self._work_queue.put(
+                    ("test_progress", (result, index, total))
+                ),
+                cancel_event=cancel_event,
+            )
+            self._work_queue.put(("test_complete", summary))
+        except Exception as exc:
+            self._work_queue.put(("worker_error", f"Test suite worker failed: {exc}"))
+
+    def _cancel_test_suite(self) -> None:
+        if self._test_cancel_event is None or not self.is_busy:
+            return
+        self._test_cancel_event.set()
+        self.test_dashboard.cancel_pending()
+        self.compiler_status.set("Cancelling regression suite...")
+        self._log_console("Regression suite cancellation requested.", "warning")
+
     def _start_compilation(self, modes: tuple[str, ...]) -> None:
         if self.is_busy:
             self.compiler_status.set("Another build or compilation is already running")
@@ -794,6 +911,10 @@ class MiniLangIDE(tk.Tk):
             return
 
         self.pipeline.reset()
+        self._log_console(
+            "Compiler pipeline started: "
+            + ", ".join(MODE_LABELS[mode] for mode in modes)
+        )
         for mode in modes:
             self.pipeline.set_state(MODE_PHASES[mode], "running")
             self.output_views[MODE_TABS[mode]].set_content("Running compiler...\n", "warning")
@@ -819,6 +940,11 @@ class MiniLangIDE(tk.Tk):
                     self._show_build_result(payload)  # type: ignore[arg-type]
                 elif event == "compile":
                     self._show_compiler_results(payload)  # type: ignore[arg-type]
+                elif event == "test_progress":
+                    result, index, total = payload  # type: ignore[misc]
+                    self.test_dashboard.add_result(result, index, total)
+                elif event == "test_complete":
+                    self._show_test_summary(payload)  # type: ignore[arg-type]
                 elif event == "worker_error":
                     self._show_worker_error(str(payload))
         except queue.Empty:
@@ -847,6 +973,11 @@ class MiniLangIDE(tk.Tk):
             "Compiler build completed successfully" if result.ok else "Compiler build failed — see Build Log"
         )
         self._refresh_compiler_state()
+        self._log_console(
+            f"Compiler build {'passed' if result.ok else 'failed'} "
+            f"(exit {result.return_code}, {result.duration_ms} ms).",
+            "success" if result.ok else "error",
+        )
         self._end_work()
 
     def _show_compiler_results(self, results: dict[str, CompilerResult]) -> None:
@@ -925,6 +1056,45 @@ class MiniLangIDE(tk.Tk):
         else:
             self.compiler_status.set(f"Pipeline finished with {error_count or 1} error(s)")
             self.output_notebook.select(self.diagnostics_view)
+        self._log_console(
+            f"Compiler pipeline {'passed' if all_successful else 'failed'} "
+            f"(exit {max_exit}, {total_duration} ms).",
+            "success" if all_successful else "error",
+        )
+        self._end_work()
+
+    def _show_test_summary(self, summary: SuiteSummary) -> None:
+        self.test_dashboard.finish(summary)
+        self._test_cancel_event = None
+        if summary.cancelled:
+            self.compiler_status.set(
+                f"Regression suite cancelled after {summary.total} check(s)"
+            )
+            self.run_status.set(f"Cancelled  |  Time {summary.duration_ms} ms")
+            level = "warning"
+            message = (
+                f"Regression suite cancelled: {summary.passed} passed, "
+                f"{summary.failed} failed, {summary.total} completed "
+                f"in {summary.duration_ms} ms."
+            )
+        else:
+            self.compiler_status.set(
+                "All regression checks passed"
+                if summary.ok
+                else f"Regression suite failed {summary.failed} check(s)"
+            )
+            self.run_status.set(
+                f"Exit {0 if summary.ok else 1}  |  Time {summary.duration_ms} ms"
+            )
+            level = "success" if summary.ok else "error"
+            message = (
+                f"Regression suite complete: {summary.passed}/{summary.total} passed, "
+                f"{summary.failed} failed in {summary.duration_ms} ms."
+            )
+        self.metrics_status.set(
+            f"Tests {summary.total}  |  Passed {summary.passed}  |  Failed {summary.failed}"
+        )
+        self._log_console(message, level)
         self._end_work()
 
     def _show_worker_error(self, message: str) -> None:
@@ -932,6 +1102,11 @@ class MiniLangIDE(tk.Tk):
         self.editor.clear_diagnostics()
         self.output_notebook.select(self.diagnostics_view)
         self.compiler_status.set("Internal GUI worker error")
+        self._test_cancel_event = None
+        if hasattr(self, "test_dashboard"):
+            self.test_dashboard.run_button.configure(state="normal")
+            self.test_dashboard.stop_button.configure(state="disabled")
+        self._log_console(message, "error")
         self._end_work()
 
     def _begin_work(self, status: str) -> bool:
@@ -988,6 +1163,7 @@ class MiniLangIDE(tk.Tk):
             "tokens": "Run Lexical Analysis to view the token stream.\n",
             "ast": "Run Parser / AST to view the abstract syntax tree.\n",
             "symtab": "Run Semantic / Symbols to view the symbol table.\n",
+            "console": "Session console ready.\n",
         }
         for key, message in messages.items():
             self.output_views[key].set_content(message)
@@ -1002,12 +1178,18 @@ class MiniLangIDE(tk.Tk):
         self.run_status.set("Exit --  |  Time --")
         self.compiler_status.set("Outputs cleared")
 
+    def _log_console(self, message: str, tag: str | None = None) -> None:
+        view = self.output_views.get("console")
+        if isinstance(view, OutputView):
+            view.append(f"[{time.strftime('%H:%M:%S')}] {message}\n", tag)
+
     def _bind_shortcuts(self) -> None:
         self.bind("<Control-n>", lambda _event: self._new_file())
         self.bind("<Control-o>", lambda _event: self._open_file())
         self.bind("<Control-s>", lambda _event: self._save_file())
         self.bind("<Control-Shift-S>", lambda _event: self._save_file_as())
         self.bind("<Control-b>", lambda _event: self._build_compiler())
+        self.bind("<Control-t>", lambda _event: self._run_test_suite())
         self.bind("<F5>", lambda _event: self._run_pipeline())
         self.bind("<Control-Key-1>", lambda _event: self._run_mode("tokens"))
         self.bind("<Control-Key-2>", lambda _event: self._run_mode("ast"))
@@ -1032,6 +1214,29 @@ class MiniLangIDE(tk.Tk):
             available = max(self.workspace_pane.winfo_height(), 700)
             self.workspace_pane.sashpos(0, int(available * 0.62))
         except tk.TclError:
+            pass
+
+    def _restore_layout(self) -> None:
+        try:
+            self.main_pane.sashpos(0, self.saved_settings.main_sash)
+            self.workspace_pane.sashpos(0, self.saved_settings.workspace_sash)
+            tabs = self.output_notebook.tabs()
+            if tabs:
+                selected = min(self.saved_settings.selected_tab, len(tabs) - 1)
+                self.output_notebook.select(tabs[selected])
+        except tk.TclError:
+            self._set_initial_splitters()
+
+    def _save_layout(self) -> None:
+        try:
+            settings = AppSettings(
+                geometry=self.geometry(),
+                main_sash=self.main_pane.sashpos(0),
+                workspace_sash=self.workspace_pane.sashpos(0),
+                selected_tab=self.output_notebook.index("current"),
+            )
+            self.settings_store.save(settings)
+        except (OSError, tk.TclError):
             pass
 
     def _focus_explorer(self) -> None:
@@ -1078,6 +1283,8 @@ class MiniLangIDE(tk.Tk):
                 widget.focus_view()
             elif isinstance(widget, StructuredOutputView):
                 widget.focus_view()
+            elif isinstance(widget, TestDashboard):
+                widget.focus_view()
 
     def _show_about(self) -> None:
         messagebox.showinfo(
@@ -1091,10 +1298,13 @@ class MiniLangIDE(tk.Tk):
 
     def _close_requested(self) -> None:
         if self.is_busy and not messagebox.askyesno(
-            "Operation running", "A build or compilation is still running. Close anyway?"
+            "Operation running", "A background operation is still running. Close anyway?"
         ):
             return
         if self._confirm_discard_changes():
+            if self._test_cancel_event is not None:
+                self._test_cancel_event.set()
+            self._save_layout()
             self.destroy()
 
 
