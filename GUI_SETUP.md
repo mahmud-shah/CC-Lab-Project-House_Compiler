@@ -1,186 +1,129 @@
 # MiniLang Compiler Studio
 
-This interface is a Python/Tkinter front end for the existing `build/mcc`
-compiler. It does not duplicate compiler logic. Each Run action writes the
-editor contents to a temporary `.mc` file and invokes the real executable with
-`--tokens`, `--ast`, `--symtab`, or `--tac`.
+MiniLang Compiler Studio is the Tkinter desktop interface for the existing
+Flex/Bison `mcc` compiler. The interface never reimplements compiler logic: all
+tokens, diagnostics, AST nodes, symbols, and three-address code come directly
+from `build/mcc`.
 
-## Features
+## Requirements
 
-- Line-numbered MiniLang editor with syntax highlighting and undo/redo
-- New, open, save, and save-as source-file actions
-- Valid built-in examples plus an intentional error example
-- Separate Tokens, AST, Symbol Table, TAC, and Diagnostics tabs
-- Full pipeline on a background thread, so the window remains responsive
-- Phase status, exit codes, compiler timing, and compiler-path validation
-- Headless backend self-test for WSL terminals and CI
-
-## One-time WSL2 preparation
-
-Run these commands from Ubuntu:
+On Ubuntu or WSL2:
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-tk build-essential flex bison
-cd ~/Compiler-Construction-Lab-Project
+sudo apt install -y python3 python3-tk make gcc flex bison
+```
+
+WSL2 users need WSLg or another configured graphical display.
+
+## Build and launch
+
+From the repository root:
+
+```bash
 make
-```
-
-If your repository has a different folder name, change only the `cd` command.
-All remaining commands in this guide assume you are at the repository root.
-
-## Manual implementation and commit sequence
-
-The files are intentionally grouped into small tasks. Create the named files,
-copy their supplied contents, run the verification command, and only then make
-the shown commit. Nothing in this sequence modifies the C++ compiler.
-
-### Task 1 — compiler adapter
-
-Create:
-
-```bash
-mkdir -p gui
-touch gui/__init__.py gui/compiler_runner.py
-```
-
-After pasting both files, verify:
-
-```bash
-python3 -m py_compile gui/__init__.py gui/compiler_runner.py
-python3 -c "from pathlib import Path; from gui.compiler_runner import CompilerRunner; print(CompilerRunner(Path.cwd()).validate())"
-```
-
-The second command should print `(True, 'Compiler ready: .../build/mcc')`.
-Then commit and push:
-
-```bash
-git add gui/__init__.py gui/compiler_runner.py
-git commit -m "feat(gui): add compiler process adapter"
-git push
-```
-
-### Task 2 — editor and examples
-
-Create:
-
-```bash
-touch gui/code_editor.py gui/examples.py
-```
-
-After pasting both files, verify and commit:
-
-```bash
-python3 -m py_compile gui/code_editor.py gui/examples.py
-git add gui/code_editor.py gui/examples.py
-git commit -m "feat(gui): add MiniLang editor and examples"
-git push
-```
-
-### Task 3 — application window
-
-Create:
-
-```bash
-touch gui/app.py
-```
-
-After pasting the file, verify and commit:
-
-```bash
-python3 -m py_compile gui/app.py
-python3 -c "from gui.app import MiniLangIDE; print('GUI module import: PASS')"
-git add gui/app.py
-git commit -m "feat(gui): add compiler studio interface"
-git push
-```
-
-### Task 4 — launcher and documentation
-
-Create:
-
-```bash
-touch run_gui.py GUI_SETUP.md
-chmod +x run_gui.py
-```
-
-After pasting both files, run the complete backend test:
-
-```bash
 python3 run_gui.py --self-test
+python3 run_gui.py
 ```
 
-Expected final line:
+No third-party Python package is required.
+
+## Workspace
+
+- **Project** lists editable repository source and documentation files.
+- **Tests** groups all valid examples and invalid lexical, syntax, and semantic
+  cases from the repository.
+- Double-click a Project file to edit it normally.
+- Double-click a Test to load a protected editor copy, preserving the original
+  test and golden output.
+- Drag the panel separators to resize the explorer, editor, and output areas.
+- Use `Ctrl+Shift+E` and `Ctrl+J` to show or hide the explorer and output panel.
+
+## Compiler views
+
+The pipeline strip represents the required phases:
 
 ```text
-GUI backend self-test passed.
+Lexical -> Syntax -> AST -> Symbols -> Semantic -> TAC
 ```
 
-Now open the window:
+The output notebook contains:
 
-```bash
-python3 run_gui.py
-```
+- Compiler Output
+- Lexical Output
+- Syntax / AST
+- Semantic / Symbols
+- Three Address Code
+- Errors
+- Warnings
+- Console
+- Build Log
+- Test Suite
+- Expected Output
 
-When the window and pipeline work, commit and push:
+Structured rows retain access to the exact raw compiler output. Source-aware
+rows and diagnostics can navigate back to the corresponding editor location.
 
-```bash
-git add run_gui.py GUI_SETUP.md
-git commit -m "feat(gui): add launcher and WSL setup guide"
-git push
-```
+## Regression suite
 
-## Daily use
+Press `Ctrl+T` or choose **Run 42 Tests**. The dashboard performs the same
+categories as `scripts/run_tests.sh`:
 
-Build the compiler after C++ changes, then launch the interface:
+- 15 valid program checks
+- 17 invalid diagnostic golden checks
+- 10 TAC golden-output checks
 
-```bash
-make
-python3 run_gui.py
-```
+A correct repository shows 42 passed and 0 failed. Select a result to compare
+expected and actual output, or double-click it to load its source. **Stop**
+requests cancellation between compiler checks.
 
-Useful shortcuts:
+## Keyboard shortcuts
 
 | Shortcut | Action |
 |---|---|
-| `Ctrl+N` | New source |
-| `Ctrl+O` | Open source |
-| `Ctrl+S` | Save source |
+| `Ctrl+N` | New source buffer |
+| `Ctrl+O` | Open a file |
+| `Ctrl+S` | Save |
 | `Ctrl+Shift+S` | Save as |
 | `F5` | Run the full pipeline |
-| `Ctrl+1` | Run Tokens |
-| `Ctrl+2` | Run AST |
-| `Ctrl+3` | Run Symbol Table |
-| `Ctrl+4` | Run TAC |
+| `Ctrl+B` | Build the compiler |
+| `Ctrl+T` | Run all regression checks |
+| `Ctrl+1` | Lexical analysis |
+| `Ctrl+2` | Syntax and AST |
+| `Ctrl+3` | Semantic analysis and symbols |
+| `Ctrl+4` | Three-address code |
+| `Ctrl+F` | Find |
+| `Ctrl+H` | Replace |
+| `Ctrl+G` | Go to line |
+| `Ctrl++` / `Ctrl+-` | Editor zoom |
+| `Ctrl+0` | Reset editor zoom |
+| `Ctrl+Shift+E` | Toggle explorer |
+| `Ctrl+J` | Toggle output panel |
+| `F11` | Toggle full screen |
+| `Escape` | Leave full screen |
 
-## Compiler-path override
+## Recommended demonstration
 
-The default executable is `./build/mcc`. To use another build:
+1. Launch the IDE and show the Project and Tests explorers.
+2. Load the complete valid example and press `F5`.
+3. Show all six pipeline stages passing.
+4. Demonstrate the lexical table, AST hierarchy, symbol scopes, and TAC table.
+5. Load `multiple_errors.mc`, compile it, and use the Errors view to navigate
+   between marked source locations.
+6. Press `Ctrl+T` and show all 42 regression checks passing.
+7. Select one invalid test and one TAC test to demonstrate exact golden-output
+   comparison.
 
-```bash
-python3 run_gui.py --compiler /absolute/path/to/mcc
-```
+## Architecture
 
-Or set the project-specific environment variable for one launch:
+- `gui/app.py` coordinates application state and background workers.
+- `gui/code_editor.py` owns editing, highlighting, navigation, and diagnostics.
+- `gui/compiler_runner.py` safely invokes `build/mcc` without shell expansion.
+- `gui/output_parsers.py` and `gui/output_views.py` provide structured views.
+- `gui/test_runner.py` and `gui/test_dashboard.py` implement regression checks.
+- `gui/project_explorer.py` provides repository navigation.
+- `gui/theme.py`, `gui/widgets.py`, and `gui/polish.py` provide the visual system.
+- `gui/settings.py` persists window and panel layout outside the repository.
 
-```bash
-MINILANG_COMPILER=/absolute/path/to/mcc python3 run_gui.py
-```
-
-## WSL2 display troubleshooting
-
-On Windows 11, GUI applications normally open through WSLg. If the backend
-self-test passes but no window opens:
-
-1. Close Ubuntu.
-2. In Windows PowerShell, run `wsl --update`, followed by `wsl --shutdown`.
-3. Start Ubuntu again and run `python3 run_gui.py` from the repository root.
-
-If the message says Tkinter is missing, install it with:
-
-```bash
-sudo apt install -y python3-tk
-```
-
-If the compiler badge is red, first run `make`, then click the badge to see the
-exact path being checked.
+This separation keeps the GUI independent from the Flex/Bison implementation
+and makes the interface safe to extend without changing compiler behavior.
