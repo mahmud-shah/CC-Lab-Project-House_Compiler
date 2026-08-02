@@ -1,9 +1,47 @@
 # MiniLang Compiler — Project Report
 
-**Course:** Compiler Construction Lab  
-**Institution:** Department of Computer Science and Engineering, Metropolitan University, Bangladesh  
-**Developer:** Al Mahmud  
-**Project:** Design and Implement a Mini Programming Language Compiler using Flex and Bison
+**Course:** Compiler Construction Lab
+
+**Institution:** Department of Computer Science and Engineering, Metropolitan University, Bangladesh
+
+**Developer:** Al Mahmud
+
+**Project:** Design and Implement a Mini Programming Language Compiler Using Flex and Bison
+
+**Implementation:** Flex, Bison, C++17, GNU Make, Python 3, and Tkinter
+
+**Primary platform:** Ubuntu/WSL2
+
+**Report status:** Final implementation report
+
+---
+
+## Abstract
+
+This project implements a complete compiler front-end with intermediate-code
+generation for a small statically typed language named MiniLang. The compiler
+uses Flex for lexical analysis, Bison for syntax analysis, and C++17 for the
+Abstract Syntax Tree (AST), nested-scope symbol table, semantic analyzer,
+diagnostic system, and Three Address Code (TAC) generator. The implementation
+supports integer, floating-point, and Boolean values; declarations;
+assignments; expressions; nested blocks; `if`; `if-else`; `while`; and
+`print`.
+
+The compiler reports lexical, syntax, and semantic errors with line and column
+locations and, where possible, corrective hints. Parsing and semantic analysis
+are designed to collect multiple independent errors instead of stopping after
+the first recoverable problem. Successful programs can be inspected through
+token, AST, symbol-table, and TAC command-line modes.
+
+An optional Python/Tkinter desktop application was also developed. It uses the
+existing `build/mcc` executable as its compiler backend and provides a
+professional editor, test explorer, structured compiler views, clickable
+diagnostics, build integration, and a live regression dashboard. The GUI does
+not duplicate any compiler rules.
+
+The final automated suite contains 42 checks over 32 distinct MiniLang source
+programs: 15 valid-compilation checks, 17 exact diagnostic checks, and 10 TAC
+golden-output comparisons. The verified result is 42 passed and 0 failed.
 
 ---
 
@@ -28,169 +66,263 @@
 
 ## 1. Introduction
 
-A compiler is the foundational piece of software that makes programming
-languages usable. It bridges the gap between the high-level language a
-programmer writes and the low-level representation a machine can execute.
-Understanding how compilers work — how they read source code, check it for
-correctness, and transform it into an intermediate form — is one of the most
-important topics in computer science education.
+### 1.1 Background
 
-This project implements a complete compiler front-end for a custom language
-called **MiniLang**. MiniLang is a small, statically typed imperative
-language that supports integer, floating-point, and boolean data types,
-three categories of operators, five statement types, and block-level scoping.
-It was designed specifically for this course to be expressive enough to
-demonstrate every phase of compiler construction while remaining simple
-enough to implement completely within a semester.
+A compiler translates a program from a source language into another
+representation while checking whether the program follows the language's
+lexical, grammatical, and semantic rules. Modern production compilers contain
+many optimization and machine-code stages, but their front ends still rely on
+the same foundations studied in a compiler-construction course: scanning,
+parsing, syntax-tree construction, identifier management, type checking, and
+intermediate representation generation.
 
-The compiler is built using industry-standard tools — **Flex** for lexical
-analysis, **Bison** for parsing, and **C++17** for the implementation
-language — and runs on Linux. Its output is **Three Address Code (TAC)**, a
-standard intermediate representation that sits between the source language and
-target machine code. TAC is close enough to assembly to translate efficiently
-but high-level enough to keep back-end concerns out of the front-end.
+MiniLang was selected as a teaching language because it is small enough to
+implement completely while still exercising the most important front-end
+problems. It contains multiple data types, operator precedence, nested scopes,
+control flow, type constraints, and structured intermediate code.
 
-The project integrates six compiler phases — lexical analysis, syntax
-analysis, AST construction, symbol table management, semantic analysis, and
-TAC generation — into a single cohesive pipeline. A correct program passes
-through all six phases and produces TAC output. An incorrect program is
-stopped at the earliest phase that detects the problem, with a precise,
-human-readable diagnostic pointing to the offending line and column.
+### 1.2 Project overview
+
+The implemented system accepts a MiniLang source file and processes it through
+six conceptual phases:
+
+1. lexical analysis;
+2. syntax analysis;
+3. AST construction;
+4. symbol-table management;
+5. semantic analysis; and
+6. TAC generation.
+
+Flex groups source characters into tokens. Bison validates the token sequence
+and constructs the AST. A semantic visitor enters declarations into a scoped
+symbol table, resolves identifier uses, and annotates expression nodes with
+types. The TAC visitor then converts a semantically valid AST into a linear
+intermediate representation using temporary variables, labels, and jumps.
+
+### 1.3 Scope
+
+The project implements the complete base language required by the course
+manual. TAC is the final compiler output. Assembly generation, register
+allocation, machine-code generation, arrays, functions, and optimization are
+not claimed as implemented features.
+
+The Tkinter interface is an additional presentation layer. Its purpose is to
+make the compiler easier to demonstrate and inspect, not to replace or alter
+the C++ compiler.
+
+### 1.4 Main outcomes
+
+The final project provides:
+
+- one `mcc` command-line compiler;
+- exact line-and-column diagnostics;
+- a printable AST;
+- a nested-scope symbol table;
+- multi-error semantic analysis;
+- TAC for expressions and control flow;
+- a reproducible Make-based build;
+- a 42-check automated regression suite; and
+- a professional Tkinter compiler studio.
 
 ---
 
 ## 2. Objectives
 
-This project sets out to demonstrate the following:
+### 2.1 General objective
 
-1. **Lexical analysis** — how a scanner groups raw characters into meaningful
-   tokens using regular expressions and longest-match rules.
+The general objective is to design and implement a complete MiniLang compiler
+front end, ending in Three Address Code, and to demonstrate the relationship
+between formal language rules and a maintainable software architecture.
 
-2. **Syntax analysis** — how a parser uses a context-free grammar to verify
-   that a token sequence forms a grammatically valid program, and how to
-   recover gracefully from syntax errors so multiple problems are reported.
+### 2.2 Specific objectives
 
-3. **AST construction** — how the parse tree is reduced to an abstract
-   syntax tree that captures the program's structure without syntactic noise
-   (parentheses, semicolons) and becomes the central data structure for all
-   subsequent phases.
+The project aims to:
 
-4. **Symbol table management** — how declared identifiers are tracked across
-   nested scopes and how the table enforces the rule that a variable declared
-   inside a block is not visible outside it.
+1. implement all required token classes using Flex regular expressions;
+2. track the line and column of each token;
+3. implement a conflict-free MiniLang grammar using Bison;
+4. recover from selected syntax errors at statement and block boundaries;
+5. construct a meaningful AST during parsing;
+6. traverse the AST through a reusable visitor interface;
+7. maintain identifiers in nested lexical scopes;
+8. detect undeclared names, redeclaration, scope violations, incompatible
+   assignments, and invalid expressions;
+9. infer expression types and preserve those results in the AST;
+10. generate TAC for assignments, arithmetic, comparisons, logical
+    expressions, branches, loops, and print statements;
+11. report uniform diagnostics with helpful suggestions;
+12. verify behavior using exact golden outputs;
+13. expose compiler phases through a clear command-line interface; and
+14. provide an optional responsive GUI for editing, compiling, inspecting, and
+    testing programs.
 
-5. **Semantic analysis** — how a compiler enforces rules the grammar alone
-   cannot check: that every variable is declared before use, that types are
-   compatible in assignments and expressions, that logical operators receive
-   boolean operands, and that control-flow conditions are boolean.
+### 2.3 Acceptance criteria
 
-6. **Intermediate code generation** — how a high-level AST is translated into
-   a flat, linear sequence of three-address instructions that correctly
-   implement arithmetic, control flow, and short-circuit logical evaluation.
+The implementation is considered successful when:
+
+- `make` regenerates and builds the compiler from the Flex and Bison sources;
+- valid MiniLang programs return exit code 0 without diagnostics;
+- invalid programs return exit code 1 with the expected diagnostics;
+- TAC is produced only for syntactically and semantically valid programs;
+- every mandatory compiler module is independently inspectable;
+- all 42 automated checks pass; and
+- the GUI backend self-test passes tokens, AST, symbol-table, and TAC modes.
 
 ---
 
 ## 3. Language Specification
 
-### 3.1 Data Types
+### 3.1 Data types
 
-MiniLang has exactly three concrete types:
+MiniLang contains three concrete data types.
 
-| Type | Description | Literals |
+| Type | Description | Example literals |
 |---|---|---|
-| `int` | Signed integer | `0`, `42`, `100` |
-| `float` | Floating-point number | `3.14`, `0.5`, `2.71` |
-| `bool` | Boolean | `true`, `false` |
+| `int` | Integer value | `0`, `10`, `42` |
+| `float` | Floating-point value | `0.5`, `1.25`, `3.14` |
+| `bool` | Boolean value | `true`, `false` |
 
-One implicit conversion is defined: an `int` value may be widened to `float`
-in assignments and arithmetic. All other cross-type mixing is a semantic error.
+An `int` value may be widened to `float`. Narrowing from `float` to `int` and
+mixing Boolean values with numeric values are rejected.
 
-### 3.2 Operators
+### 3.2 Lexical elements
 
-| Category | Operators | Result type |
-|---|---|---|
-| Arithmetic | `+` `-` `*` `/` `%` | `int` or `float` (see §3.3) |
-| Relational | `<` `>` `<=` `>=` | `bool` |
-| Equality | `==` `!=` | `bool` |
-| Logical | `&&` `\|\|` `!` | `bool` |
+Keywords are:
 
-**Type rules for operators:**
-- `%` requires both operands to be `int`.
-- Arithmetic operators `+` `-` `*` `/` require numeric operands; if either is
-  `float` the result is `float`, otherwise `int`.
-- Relational operators require numeric operands.
-- Equality operators require both operands to be the same kind: both numeric
-  or both `bool`. Mixing `bool` with a numeric type is an error.
-- Logical operators require `bool` operands. Using an `int` or `float`
-  where a `bool` is expected is always an error.
-- The condition of `if` and `while` must be `bool`.
-
-### 3.3 Statements
-
-```
-Variable declaration :  int x;
-Assignment           :  x = expression;
-If statement         :  if (expression) statement
-If-else statement    :  if (expression) statement else statement
-While loop           :  while (expression) statement
-Print statement      :  print expression;
-Block                :  { statement* }
+```text
+int  float  bool  if  else  while  print  true  false
 ```
 
-Blocks create a new scope. A variable declared inside a block is not visible
-outside it.
+Identifiers match:
 
-### 3.4 Complete Context-Free Grammar
-
-```
-program     →  stmt_list
-
-stmt_list   →  stmt_list stmt
-            |  ε
-
-stmt        →  declaration
-            |  assignment
-            |  if_stmt
-            |  while_stmt
-            |  print_stmt
-            |  block
-
-declaration →  type IDENT ';'
-
-type        →  'int'  |  'float'  |  'bool'
-
-assignment  →  IDENT '=' expr ';'
-
-if_stmt     →  'if' '(' expr ')' stmt
-            |  'if' '(' expr ')' stmt 'else' stmt
-
-while_stmt  →  'while' '(' expr ')' stmt
-
-print_stmt  →  'print' expr ';'
-
-block       →  '{' stmt_list '}'
-
-expr        →  expr '||' expr
-            |  expr '&&' expr
-            |  expr '==' expr   |  expr '!=' expr
-            |  expr '<'  expr   |  expr '>'  expr
-            |  expr '<=' expr   |  expr '>=' expr
-            |  expr '+'  expr   |  expr '-'  expr
-            |  expr '*'  expr   |  expr '/'  expr   |  expr '%' expr
-            |  '!' expr
-            |  '-' expr
-            |  '(' expr ')'
-            |  IDENT
-            |  INT_LIT  |  FLOAT_LIT  |  'true'  |  'false'
+```text
+[A-Za-z_][A-Za-z0-9_]*
 ```
 
-### 3.5 Sample Program
+The language supports integer and float literals, parentheses, braces,
+semicolons, whitespace, line comments, and block comments. Whitespace and
+comments are discarded by the scanner.
 
-The following program from the Project Manual (§5.5) exercises all major
-language features and is used as the primary demonstration program throughout
-this report:
+### 3.3 Operators
 
+| Category | Operators | Constraint | Result |
+|---|---|---|---|
+| Arithmetic | `+`, `-`, `*`, `/` | Numeric operands | `int` or `float` |
+| Modulus | `%` | Both operands must be `int` | `int` |
+| Relational | `<`, `>`, `<=`, `>=` | Numeric operands | `bool` |
+| Equality | `==`, `!=` | Both numeric, or both `bool` | `bool` |
+| Logical | `&&`, `||` | Both operands must be `bool` | `bool` |
+| Unary logical | `!` | Operand must be `bool` | `bool` |
+| Unary arithmetic | `-` | Operand must be numeric | Operand type |
+
+### 3.4 Statements
+
+MiniLang supports:
+
+```text
+Declaration:     int x;
+Assignment:      x = expression;
+Print:           print expression;
+If:              if (condition) statement
+If-else:         if (condition) statement else statement
+While:           while (condition) statement
+Block:           { statement-list }
 ```
+
+Declarations and assignments are separate. Declaration-initialization syntax
+such as `int x = 10;` is not supported by the implemented grammar.
+
+### 3.5 Context-Free Grammar
+
+The implemented grammar is summarized below. The Bison source uses one `expr`
+nonterminal and precedence declarations for expression ambiguity.
+
+```text
+program       -> stmt_list
+
+stmt_list     -> stmt_list stmt
+               | empty
+
+stmt          -> declaration
+               | assignment
+               | if_stmt
+               | while_stmt
+               | print_stmt
+               | block
+
+declaration   -> type_spec IDENT ';'
+
+type_spec     -> 'int'
+               | 'float'
+               | 'bool'
+
+assignment    -> IDENT '=' expr ';'
+
+if_stmt       -> 'if' '(' expr ')' stmt
+               | 'if' '(' expr ')' stmt 'else' stmt
+
+while_stmt    -> 'while' '(' expr ')' stmt
+
+print_stmt    -> 'print' expr ';'
+
+block         -> '{' stmt_list '}'
+
+expr          -> expr '||' expr
+               | expr '&&' expr
+               | expr '==' expr
+               | expr '!=' expr
+               | expr '<' expr
+               | expr '>' expr
+               | expr '<=' expr
+               | expr '>=' expr
+               | expr '+' expr
+               | expr '-' expr
+               | expr '*' expr
+               | expr '/' expr
+               | expr '%' expr
+               | '!' expr
+               | '-' expr
+               | '(' expr ')'
+               | IDENT
+               | INT_LIT
+               | FLOAT_LIT
+               | 'true'
+               | 'false'
+```
+
+### 3.6 Precedence and associativity
+
+| Level, low to high | Operators | Associativity |
+|---:|---|---|
+| 1 | `||` | left |
+| 2 | `&&` | left |
+| 3 | `==`, `!=` | left |
+| 4 | `<`, `>`, `<=`, `>=` | left |
+| 5 | `+`, `-` | left |
+| 6 | `*`, `/`, `%` | left |
+| 7 | `!`, unary `-` | unary precedence |
+
+The dangling `else` binds to the nearest unmatched `if`.
+
+### 3.7 Semantic rules
+
+- Every identifier must be declared before use.
+- A name cannot be redeclared in the same scope.
+- A declaration in an inner scope may shadow an outer declaration.
+- A block-local name becomes inaccessible when its block ends.
+- `if` and `while` conditions must be Boolean.
+- Mixed `int`/`float` arithmetic produces `float`.
+- Assigning `int` to `float` is allowed.
+- Assigning `float` to `int` is rejected.
+- `%` requires two integers.
+- Logical operators require Boolean operands.
+- Equality accepts numeric-to-numeric or Boolean-to-Boolean comparison.
+
+### 3.8 Sample program
+
+The main example follows the language defined in the project manual.
+
+```text
 int x;
 int y;
 bool flag;
@@ -217,90 +349,142 @@ if (flag == true) {
 
 ### 4.1 Pipeline
 
-The six compiler phases form a linear pipeline. Data flows in one direction:
-each phase transforms its input and hands the result to the next phase.
+The compiler uses a one-directional front-end pipeline.
 
-```
-Source file (.mc)
-        |
-        v
-+---------------------------+
-|   PHASE 1: Lexer          |  Flex (lexer.l)
-|   Characters → Tokens     |
-+---------------------------+
-        | Token stream
-        v
-+---------------------------+
-|   PHASE 2: Parser         |  Bison (parser.y)
-|   Tokens → Parse tree     |
-+---------------------------+
-        | Abstract Syntax Tree (AST)
-        v
-+---------------------------+
-|   PHASE 3: AST            |  ast.hpp / ast.cpp
-|   Meaningful node tree    |
-+---------------------------+
-        | Same AST (shared data structure)
-        v
-+---------------------------+
-|   PHASE 4: Symbol Table   |  symbol_table.hpp
-|   Track all identifiers   |
-|   Populated during Phase 5|
-+---------------------------+
-        |
-        v
-+---------------------------+
-|   PHASE 5: Semantic       |  semantic_analyzer.cpp
-|   Analyzer                |  Walks AST, enforces rules,
-|   Type checking +         |  annotates each ExprNode
-|   Scope checking          |  with its resolved type
-+---------------------------+
-        | Annotated AST
-        v
-+---------------------------+
-|   PHASE 6: TAC Generator  |  tac_generator.cpp
-|   Annotated AST → TAC     |
-+---------------------------+
-        | Three Address Code
-        v
-      Output
+```text
+Source file
+    |
+    v
+Flex scanner
+    |
+    v
+Bison parser and AST construction
+    |
+    v
+Semantic analyzer and nested symbol table
+    |
+    v
+Three Address Code generator
+    |
+    v
+CLI output or .tac file
 ```
 
-### 4.2 Design Patterns
+The parser constructs the AST directly; there is no separately stored concrete
+parse tree. The semantic analyzer writes inferred types into expression nodes.
+TAC generation occurs only after semantic analysis succeeds.
 
-**Visitor Pattern.** The AST is traversed by three independent visitors:
-`ASTPrinter` (prints the tree), `SemanticAnalyzer` (type-checks and
-annotates), and `TACGenerator` (emits instructions). Each visitor implements
-the same `ASTVisitor` interface. Adding a new consumer (such as a Graphviz
-printer or an optimizer) requires writing one new class with no changes to
-the AST nodes themselves.
+### 4.2 Module organization
 
-**Error collector.** Rather than aborting on the first error, all phases
-report diagnostics into a shared `ErrorReporter` object. After all phases
-complete, the driver prints every diagnostic and returns exit code 1 if
-any errors were found. This means a program with five semantic errors
-produces five error messages, not just one.
+| Module | Main files | Responsibility |
+|---|---|---|
+| Common | `source_location.hpp`, `type.hpp`, `error_reporter.*` | Shared types and diagnostics |
+| Lexer | `src/lexer/lexer.l` | Characters to tokens |
+| Parser | `src/parser/parser.y` | Grammar validation and AST construction |
+| AST | `include/minilang/ast.hpp`, `src/ast/` | Program representation and printer |
+| Symbol table | `include/minilang/symbol_table.hpp`, `src/symbol_table/` | Nested declarations and lookup |
+| Semantic | `src/semantic/semantic_analyzer.cpp` | Type and scope rules |
+| TAC | `include/minilang/tac*.hpp`, `src/tac/` | Intermediate-code model and generation |
+| Driver | `src/main.cpp` | CLI validation and pipeline coordination |
 
-**Annotated AST.** The semantic analyzer writes the resolved type into each
-`ExprNode` as it checks it. By the time the TAC generator runs, every
-expression node already carries its type. The TAC generator reads these types
-to decide, for example, whether to emit a widening cast instruction.
+### 4.3 Architectural patterns
 
-### 4.3 Module Dependencies
+#### Visitor pattern
 
+Each AST node implements `accept(ASTVisitor&)`. `ASTPrinter`,
+`SemanticAnalyzer`, and `TACGenerator` implement the visitor interface. This
+keeps operations separate from node storage and avoids large node-kind switch
+statements.
+
+#### Collecting diagnostics
+
+Lexer, parser, and semantic analyzer report through a shared `ErrorReporter`.
+Diagnostics are stored, printed together, and used to determine the exit code.
+This permits multiple recoverable diagnostics.
+
+#### Annotated AST
+
+`ExprNode` contains a `Type` field. The semantic analyzer fills this field
+bottom-up. `AssignmentNode` records the resolved target type. TAC generation
+uses these annotations to decide, for example, whether an `int`-to-`float` cast
+is required.
+
+#### Scoped hash tables
+
+The active symbol table is a stack of hash maps. Lookup begins in the
+innermost scope. Exited scopes are archived for later symbol-table display.
+
+### 4.4 Command-line interface
+
+The compiler is built as `build/mcc`.
+
+```text
+./build/mcc <source-file> [options]
 ```
-common (SourceLocation, Type, ErrorReporter)
-    ▲            ▲
-  lexer        parser ──▶ ast ◀── semantic ──▶ symbol_table
-                                      |
-                                      ▼
-                                    tac
-                                      ▲
-                                   driver (main.cpp)
-```
 
-No module imports from a module below it in this graph, so there are no
-circular dependencies.
+| Option | Purpose |
+|---|---|
+| `--tokens` | Print the scanner token stream |
+| `--ast` | Parse and print the AST |
+| `--symtab` | Analyze and print the symbol table |
+| `--tac` | Generate TAC on standard output |
+| `-o <file>` | Generate TAC and write it to a file |
+| `--help` | Print usage information |
+
+Without an inspection option, the driver parses and semantically validates the
+program. It prints `Compilation successful.` when no error is present. TAC is
+printed only when requested by `--tac` or `-o`.
+
+### 4.5 Desktop interface
+
+The optional GUI uses Python 3, Tkinter, and ttk. `run_gui.py` is its single
+entry point. The interface invokes `build/mcc` through a subprocess adapter;
+therefore, command-line and GUI compilation use exactly the same compiler.
+
+The final interface provides:
+
+- a Dark Modern IDE theme;
+- a line-numbered MiniLang editor;
+- syntax highlighting and automatic indentation;
+- bracket matching, find/replace, go-to-line, undo/redo, and zoom;
+- a repository-backed Test Explorer;
+- a six-stage visual pipeline;
+- structured lexical, AST, symbol-table, and TAC views;
+- clickable diagnostics and editor markers;
+- Compiler Output, Errors, Warnings, Console, Build Log, Test Suite, and
+  Expected Output views;
+- a cancellable 42-check regression dashboard;
+- keyboard shortcuts and panel visibility controls; and
+- persisted window and splitter positions.
+
+Background threads execute build, compiler, and test processes. They send
+results to the Tk main thread through a queue, preventing unsafe widget access
+and keeping the interface responsive.
+
+### 4.6 Repository structure
+
+```text
+CC-Lab-Project-House_Compiler/
+├── include/minilang/          public C++ headers
+├── src/
+│   ├── lexer/                 Flex source
+│   ├── parser/                Bison source
+│   ├── ast/                   AST implementation
+│   ├── common/                shared diagnostics and token names
+│   ├── symbol_table/          nested symbol-table implementation
+│   ├── semantic/              semantic-analysis visitor
+│   ├── tac/                   TAC model and generator
+│   └── main.cpp               CLI driver
+├── gui/                       Tkinter compiler studio
+├── examples/                  representative MiniLang source
+├── tests/                     valid, invalid, and golden-output cases
+├── scripts/run_tests.sh       shell regression runner
+├── docs/                      design, grammar, and report sources
+├── Makefile                   build and test automation
+├── run_gui.py                 GUI launcher and backend self-test
+├── GUI_SETUP.md               GUI installation instructions
+└── GUI_USER_GUIDE.md          GUI use and demonstration guide
+```
 
 ---
 
@@ -308,269 +492,282 @@ circular dependencies.
 
 ### 5.1 Responsibilities
 
-The lexer (`src/lexer/lexer.l`) reads the source character by character and
-groups characters into tokens — the smallest meaningful units of the language.
-It discards whitespace and comments and reports every invalid character as a
-lexical error before continuing to scan.
+The scanner is defined in `src/lexer/lexer.l`. It groups characters into
+tokens, discards non-semantic input, attaches locations, and reports lexical
+errors while continuing where possible.
 
-### 5.2 Token Categories
+### 5.2 Token categories
 
-| Category | Examples | Notes |
-|---|---|---|
-| Keywords | `int` `float` `bool` `if` `else` `while` `print` `true` `false` | Listed before identifier rule |
-| Identifiers | `x` `myVar` `_count` | `[A-Za-z_][A-Za-z0-9_]*` |
-| Integer literals | `0` `42` `100` | `[0-9]+` |
-| Float literals | `3.14` `0.5` | `[0-9]+\.[0-9]+` |
-| Operators | `+` `-` `*` `/` `%` `<` `>` `<=` `>=` `==` `!=` `&&` `\|\|` `!` | Multi-char before single-char |
-| Delimiters | `{` `}` `(` `)` `;` | |
-| Comments | `//` line, `/* */` block | Discarded, not tokenised |
-| Whitespace | spaces, tabs, newlines | Discarded |
-| Invalid tokens | anything else | Reported with line and column |
+| Category | Examples |
+|---|---|
+| Type keywords | `int`, `float`, `bool` |
+| Control keywords | `if`, `else`, `while`, `print` |
+| Boolean literals | `true`, `false` |
+| Identifiers | `x`, `_count`, `total2` |
+| Integer literals | `0`, `25`, `100` |
+| Float literals | `0.5`, `3.14` |
+| Operators | arithmetic, relational, equality, logical, assignment |
+| Delimiters | `{`, `}`, `(`, `)`, `;` |
 
-### 5.3 Key Design Decisions
+### 5.3 Longest match and rule ordering
 
-**Keyword-before-identifier ordering.** Flex resolves ties between two rules
-of equal match length by rule order. Keywords are listed first, so `int`
-matches the keyword rule rather than the identifier rule. However, `integer`
-still lexes as an identifier because its 7-character match is longer than the
-3-character keyword match — Flex's longest-match rule handles this correctly.
+Flex first chooses the longest matching rule and then uses rule order to break
+equal-length ties. Keyword rules are placed before the identifier rule, so
+`int` is a keyword. The longer text `integer` remains one identifier rather
+than the keyword `int` followed by another token.
 
-**Column tracking via `YY_USER_ACTION`.** Every Flex rule action is preceded
-by a macro that records the token's start position before advancing the
-column counter. Newlines reset both line and column. This gives every
-diagnostic an exact `[line:col]` location.
+Multi-character operators such as `<=`, `>=`, `==`, `!=`, `&&`, and `||` are
+placed before related single-character rules.
 
-**Malformed input traps.** Patterns like `123abc` (digit-starting identifier)
-and `1.2.3` (multiple decimal points) are caught by dedicated rules placed
-before the valid numeric rules, so they produce a clear diagnostic rather than
-silently splitting into two confusing tokens.
+### 5.4 Location tracking
 
-**Unterminated block comment.** An exclusive start condition (`BLOCK_COMMENT`)
-tracks the inside of `/* ... */`. An `<<EOF>>` rule inside this condition
-detects a comment that reaches end of file and reports the error at the
-position where the comment *opened*, which is the location the programmer
-actually needs to find.
+The scanner maintains `cur_line` and `cur_col`. `YY_USER_ACTION` records the
+start position of every matched lexeme and advances the column. A newline
+increments the line and resets the column to 1. The token location is shared
+with Bison through `yylloc`.
 
-### 5.4 Error Message Format
+This mechanism supports diagnostics such as:
 
-```
+```text
 Lexical Error [line 3, col 1]: Invalid token '@'
   --> hint: this character is not part of the MiniLang alphabet
 ```
 
-Every diagnostic includes the category, line, column, what was found, and a
-suggestion for how to fix it.
+### 5.5 Comments
+
+`//` comments are discarded through the end of the current line. Block
+comments use an exclusive Flex start condition. The scanner remembers where a
+block comment began so an end-of-file error points to the opening `/*` rather
+than to an unrelated final character.
+
+### 5.6 Malformed token handling
+
+Dedicated rules appear before valid numeric rules and recognize:
+
+- multiple decimal points, such as `1.2.3`;
+- a trailing decimal point without fractional digits;
+- digit-starting identifiers, such as `123abc`;
+- single `&` and `|` characters; and
+- unsupported characters.
+
+These rules prevent misleading token splits and provide targeted hints.
+
+### 5.7 Token inspection mode
+
+`--tokens` prints location, token name, lexeme, and decoded value. This is a
+scanner-only mode and returns exit code 1 if any lexical error is collected.
 
 ---
 
 ## 6. Parser Design
 
-### 6.1 Approach
+### 6.1 Bison integration
 
-The parser (`src/parser/parser.y`) implements the grammar from §3.4 using
-Bison. Rather than encoding operator precedence by rewriting the grammar into
-eight layered nonterminals (`expr → logical_or → logical_and → ...`), the
-grammar keeps a single `expr` nonterminal and uses Bison `%left` / `%right`
-declarations. The grammar stays readable and mirrors the manual's operator
-table directly; the generated parse tables are identical either way.
+The parser is defined in `src/parser/parser.y`. It uses `%union` values for
+literals, identifier strings, AST pointers, type values, and statement lists.
+The AST root is returned through a parse parameter instead of a global result
+pointer.
 
-### 6.2 Precedence and Associativity
+Bison's location type is replaced by the project's `SourceLocation`. Grammar
+actions can therefore use `@1`, `@2`, and related locations directly when
+constructing nodes.
 
-Declarations are listed from lowest binding to highest:
+### 6.2 Expression precedence
 
-| Level | Operators | Associativity |
-|---|---|---|
-| 1 (lowest) | `\|\|` | left |
-| 2 | `&&` | left |
-| 3 | `==` `!=` | left |
-| 4 | `<` `>` `<=` `>=` | left |
-| 5 | `+` `-` | left |
-| 6 | `*` `/` `%` | left |
-| 7 (highest) | `!` unary `-` | prefix (`%precedence`) |
+The grammar uses one `expr` nonterminal with precedence declarations. This
+approach keeps the grammar close to the language specification while producing
+the required parse tree. For example:
 
-**Verification:** `1 + 2 * 3` parses as `1 + (2*3)` and `a - b - c` parses
-as `(a - b) - c`, both confirmed by the `--ast` output.
-
-### 6.3 Dangling Else Resolution
-
-The grammar rule `if_stmt → 'if' '(' expr ')' stmt` is ambiguous in
-the presence of a following `else`. The standard resolution — `else` binds
-to the nearest unmatched `if` — is implemented explicitly using a
-`%precedence LOWER_THAN_ELSE` marker on the else-less production and a higher
-precedence on the `else` token. Bison shifts `else` rather than reducing,
-attaching it to the innermost `if`. No shift/reduce conflict is left in the
-table.
-
-### 6.4 Conflict Freedom
-
-The build command is:
-
-```
-bison -Wall -Wcounterexamples -Werror=conflicts-sr -Werror=conflicts-rr ...
+```text
+1 + 2 * 3
 ```
 
-The flags `-Werror=conflicts-sr` and `-Werror=conflicts-rr` turn any
-grammar conflict into a build error. The shipped grammar compiles with
-**zero shift/reduce conflicts and zero reduce/reduce conflicts**.
+is interpreted as:
 
-### 6.5 Error Recovery
-
-Two recovery productions allow parsing to continue after a syntax error:
-
-```
-stmt  →  error ';'
-block →  '{' stmt_list error '}'
+```text
+1 + (2 * 3)
 ```
 
-The first synchronises at the next semicolon. The second closes a broken
-block at its closing brace. Together they ensure that one syntax error never
-hides the errors that follow it. Recovered statements are represented as null
-pointers and skipped during AST construction; statements parsed successfully
-before the error are preserved.
+### 6.3 Dangling else
 
-**Example — three errors in one file, all reported:**
+Two precedence markers make `else` bind more strongly than reduction of an
+unmatched `if`. Therefore, `else` attaches to the nearest unmatched `if`, which
+is the standard language behavior.
 
+### 6.4 Conflict checking
+
+The Makefile invokes Bison with:
+
+```text
+-Wall -Wcounterexamples -Werror=conflicts-sr -Werror=conflicts-rr
 ```
-Syntax Error [line 2, col 1]: Unexpected 'bool', expecting ';'
-Syntax Error [line 3, col 5]: Unexpected ';'
-Syntax Error [line 5, col 8]: Unexpected end of file
-3 error(s) found.
+
+A shift/reduce or reduce/reduce conflict fails the build. This prevents hidden
+grammar ambiguity from being accepted accidentally.
+
+### 6.5 Error messages
+
+Bison's verbose messages are normalized into the common diagnostic format.
+Hints are selected for common mistakes, including:
+
+- a missing semicolon;
+- an unclosed parenthesis;
+- a stray `else`;
+- an invalid assignment target;
+- a missing expression before `{`; and
+- an unexpected end of file.
+
+### 6.6 Recovery
+
+Two recovery points are implemented:
+
+```text
+stmt  -> error ';'
+block -> '{' stmt_list error '}'
 ```
+
+The first skips to a statement terminator. The second recovers at the end of a
+block. Successfully parsed statements are kept, while the invalid recovered
+statement contributes no AST node.
+
+### 6.7 AST construction
+
+Every successful grammar reduction constructs or connects AST objects.
+Semicolons, parentheses, and grammar-only nodes do not appear in the AST. Bison
+destructors release discarded semantic values during error recovery.
 
 ---
 
 ## 7. Abstract Syntax Tree
 
-### 7.1 Design
+### 7.1 Hierarchy
 
-The AST (`include/minilang/ast.hpp`) is a hierarchy of C++ classes. Every
-node inherits from `ASTNode`, which carries a `SourceLocation`. Expression
-nodes inherit from `ExprNode`, which additionally carries a `Type` field
-filled in by the semantic analyzer. Statement nodes inherit from `StmtNode`.
+The AST is declared in `include/minilang/ast.hpp`.
 
-```
+```text
 ASTNode
-├── ExprNode (carries Type, set by semantic analyzer)
+├── ExprNode
 │   ├── IntLiteralNode
 │   ├── FloatLiteralNode
 │   ├── BoolLiteralNode
 │   ├── IdentifierNode
-│   ├── BinaryExprNode (op, lhs, rhs)
-│   └── UnaryExprNode (op, operand)
-└── StmtNode
-    ├── DeclarationNode (declType, name)
-    ├── AssignmentNode (name, value, targetType)
-    ├── IfNode (condition, thenBranch, elseBranch?)
-    ├── WhileNode (condition, body)
-    ├── PrintNode (value)
-    └── BlockNode (statements[])
-ProgramNode (statements[])
+│   ├── BinaryExprNode
+│   └── UnaryExprNode
+├── StmtNode
+│   ├── DeclarationNode
+│   ├── AssignmentNode
+│   ├── BlockNode
+│   ├── IfNode
+│   ├── WhileNode
+│   └── PrintNode
+└── ProgramNode
 ```
 
-Every node owns its children and deletes them in its destructor. Deleting the
-`ProgramNode` releases the entire tree.
+Every node records its source location. Expression nodes also contain a type
+annotation initialized to `Unresolved`. Assignment nodes contain a target type
+resolved during semantic analysis.
 
-### 7.2 Visitor Pattern
+### 7.2 Ownership
 
-The tree is traversed using the Visitor design pattern. `ASTVisitor` is an
-abstract interface with one `visit()` overload per concrete node type. Three
-concrete visitors are implemented:
+Parent nodes own child pointers. Destructors recursively delete owned
+expressions, statements, branches, and statement lists. Deleting the root
+releases the complete tree.
 
-| Visitor | Purpose |
+Bison `%destructor` declarations cover values discarded during recovery,
+preventing leaks when parsing fails.
+
+### 7.3 Visitor interface
+
+`ASTVisitor` defines one `visit` operation for every concrete node. The three
+implemented visitors are:
+
+| Visitor | Role |
 |---|---|
-| `ASTPrinter` | Prints the tree as an indented text diagram |
-| `SemanticAnalyzer` | Type-checks, annotates, and populates the symbol table |
-| `TACGenerator` | Walks the annotated tree and emits TAC instructions |
+| `ASTPrinter` | Produce an indented structural view |
+| `SemanticAnalyzer` | Resolve names, infer types, and check rules |
+| `TACGenerator` | Emit intermediate instructions |
 
-Double dispatch ensures each node calls the correct `visit()` overload for
-its own type. Adding a new visitor — such as a Graphviz printer — requires
-writing one new class and zero changes to any existing node.
+### 7.4 AST output
 
-### 7.3 Sample AST Output
+The `--ast` option prints the tree immediately after parsing, before semantic
+analysis runs. It therefore shows node structure and source locations, not the
+later internal type annotations.
 
-Running `./build/mcc examples/sample.mc --ast` on the sample program from
-§3.5 produces:
+Example excerpt:
 
-```
+```text
 Program  [1:1]
   Declaration 'x' : int  [2:5]
   Declaration 'y' : int  [3:5]
   Declaration 'flag' : bool  [4:6]
   Assignment 'x'  [6:1]
-    IntLiteral 10 : int  [6:5]
-  Assignment 'y'  [7:1]
-    IntLiteral 0 : int  [7:5]
-  Assignment 'flag'  [8:1]
-    BoolLiteral true : bool  [8:8]
+    IntLiteral 10  [6:5]
   While  [10:1]
     Condition
-      BinaryExpr '>' : bool  [10:10]
-        Identifier 'x' : int  [10:8]
-        IntLiteral 0 : int  [10:12]
-    Body
-      Block  [10:15]
-        Assignment 'y'  [11:5]
-          BinaryExpr '+' : int  [11:11]
-            Identifier 'y' : int  [11:9]
-            Identifier 'x' : int  [11:13]
+      BinaryExpr '>'  [10:10]
+        Identifier 'x'  [10:8]
+        IntLiteral 0  [10:12]
 ```
 
-Each node shows its kind, relevant payload, resolved type (`: int`, `: bool`,
-etc.), and source location `[line:col]`. The type annotations are added by the
-semantic analyzer; before that phase runs, all expression types read
-`<unresolved>`.
+The GUI parser converts this indented text into a collapsible AST tree. Nodes
+with locations can navigate back to the editor.
 
 ---
 
 ## 8. Symbol Table
 
-### 8.1 Data Structure
+### 8.1 Symbol record
 
-The symbol table (`include/minilang/symbol_table.hpp`) is implemented as a
-**stack of hash maps**. Each map represents one active scope. The global scope
-is always present at index 0. Entering a block pushes a new map; exiting a
-block pops it.
+Each symbol stores:
 
+```cpp
+struct Symbol {
+    std::string name;
+    Type type;
+    int scopeLevel;
+    int declaredLine;
+    bool initialized;
+};
 ```
-Active stack (innermost at right):
-  [scope 0: x, y, flag]  [scope 1: inner]  [scope 2: deep]
-                                                  ← top
+
+The initialization flag is updated after a valid assignment and is shown in
+the symbol-table output. The current compiler does not issue a separate
+uninitialized-read warning.
+
+### 8.2 Scope representation
+
+Active scopes are stored as a vector of hash maps:
+
+```cpp
+std::vector<std::unordered_map<std::string, Symbol>> scopes_;
 ```
 
-Each symbol entry stores:
+The final element is the current scope. Entering a block pushes an empty map;
+leaving the block copies the completed scope into an archive and removes it
+from active lookup.
 
-| Field | Type | Purpose |
-|---|---|---|
-| `name` | `string` | The identifier as written in the source |
-| `type` | `Type` | `int`, `float`, or `bool` |
-| `scopeLevel` | `int` | 0 = global, 1 = first nested block, ... |
-| `declaredLine` | `int` | Line where declared, for error messages |
-| `initialized` | `bool` | Set to `true` on first assignment |
+### 8.3 Operations
 
-### 8.2 Operations and Complexity
+| Operation | Behavior | Average complexity |
+|---|---|---:|
+| `insert` | Insert into current scope | O(1) |
+| `lookupCurrentScope` | Check current scope for redeclaration | O(1) |
+| `lookup` | Search from inner scope to outer scope | O(depth) |
+| `enterScope` | Push a new scope | O(1) |
+| `exitScope` | Archive and pop the current scope | O(size of archived scope) |
 
-| Operation | Implementation | Complexity |
-|---|---|---|
-| `insert(sym)` | Hash-map insert into top scope | O(1) average |
-| `lookupCurrentScope(name)` | Hash-map lookup in top scope only | O(1) average |
-| `lookup(name)` | Walk stack top-to-bottom | O(depth) average |
-| `enterScope()` | Push empty map | O(1) |
-| `exitScope()` | Pop and archive top map | O(1) |
+### 8.4 Shadowing and visibility
 
-### 8.3 Scope Isolation
+The same name may appear in different nested scopes. Lookup returns the
+nearest active declaration. A name declared in a block is no longer found
+after that block is exited. The semantic analyzer then reports the use as an
+undeclared or out-of-scope identifier.
 
-When a block closes, its scope is popped from the active stack and moved into
-an archive. Any subsequent lookup for a name declared in that block simply
-finds nothing in the active stack, which the semantic analyzer reports as an
-undeclared variable. This is how scope violation is detected — not by a
-separate mechanism, but by the same lookup that catches genuinely undeclared
-variables.
+### 8.5 Display
 
-### 8.4 Sample Output
+`--symtab` prints active and archived scopes. Example:
 
-Running `./build/mcc examples/sample.mc --symtab`:
-
-```
+```text
 === Symbol Table ===
 
 Scope Level 0 (global)
@@ -583,203 +780,207 @@ flag        bool    0      4     yes
 Total symbols declared: 3
 ```
 
+The GUI presents the same output as a filterable, source-aware table grouped
+by scope.
+
 ---
 
 ## 9. Semantic Analysis
 
-### 9.1 Strategy
+### 9.1 Analysis process
 
-The semantic analyzer (`src/semantic/semantic_analyzer.cpp`) is a visitor
-that walks the entire AST exactly once, performing two tasks simultaneously:
-populating the symbol table and type-checking every expression. It never
-stops at the first error; it collects all errors and reports them together
-at the end.
+The semantic analyzer visits statements in source order. Declarations are
+inserted when encountered; consequently, an identifier must be declared before
+use. A block creates a nested scope around its statements.
 
-When a sub-expression has already failed (its type is `Type::Error`), the
-parent does not emit an additional error message — it simply propagates
-`Type::Error` upward. This prevents one mistake from generating a cascade of
-redundant messages about the same root cause.
+Expression analysis is bottom-up:
 
-### 9.2 Error Classes
+1. analyze child expressions;
+2. read their types;
+3. validate the operator rule;
+4. store the resulting type in the parent expression; and
+5. use `Type::Error` to suppress redundant cascades.
 
-The semantic analyzer detects and reports seven distinct error classes:
+### 9.2 Detected errors
 
-| Class | Trigger | Example |
+| Error | Example using valid grammar |
+|---|---|
+| Undeclared variable | `print missing;` |
+| Same-scope redeclaration | `int x; int x;` |
+| Scope violation | declare `x` in a block, then use it after the block |
+| Boolean-to-numeric assignment | `int x; x = true;` |
+| Numeric-to-Boolean assignment | `bool ready; ready = 1;` |
+| Narrowing assignment | `int x; x = 3.14;` |
+| Invalid arithmetic | `int x; x = true + 1;` |
+| Invalid modulus | `float f; f = 4.5 % 2;` |
+| Invalid logical expression | `bool b; b = 1 && 2;` |
+| Invalid equality | `bool b; b = 1 == true;` |
+| Invalid condition | `int x; if (x) { print x; }` |
+
+### 9.3 Assignment compatibility
+
+| Target | Accepted source | Rejected source |
 |---|---|---|
-| S1 Undeclared variable | `lookup()` returns null | `print y;` before `int y;` |
-| S2 Redeclaration | `lookupCurrentScope()` finds existing entry | `int x; int x;` |
-| S3 Scope violation | Name used after its block closed | Accessing `inner` outside its `if` block |
-| S4 Type mismatch (assign) | RHS type incompatible with LHS | `bool b = 5;` |
-| S5 Invalid arithmetic | Bool operand to `+ - * /` | `true + 1` |
-| S6 Invalid logical | Non-bool operand to `&& \|\|` | `1 && 2` |
-| S7 Invalid equality | Bool compared with numeric | `x == true` where `x` is `int` |
-| S8 Invalid condition | `if`/`while` condition not `bool` | `if (x)` where `x` is `int` |
+| `int` | `int` | `float`, `bool` |
+| `float` | `float`, `int` | `bool` |
+| `bool` | `bool` | `int`, `float` |
 
-### 9.3 Type Rules Summary
+### 9.4 Multi-error behavior
 
-| Context | Allowed | Not allowed |
-|---|---|---|
-| `int = ___` | `int` | `float`, `bool` |
-| `float = ___` | `float`, `int` (widening) | `bool` |
-| `bool = ___` | `bool` | `int`, `float` |
-| `+` `-` `*` `/` operands | `int`, `float` | `bool` |
-| `%` operands | `int` only | `float`, `bool` |
-| `<` `>` `<=` `>=` operands | `int`, `float` | `bool` |
-| `==` `!=` operands | both numeric, or both `bool` | mixed |
-| `&&` `\|\|` `!` operands | `bool` only | `int`, `float` |
-| `if`/`while` condition | `bool` only | `int`, `float` |
+The analyzer does not stop after its first independent semantic error. The
+semantic multi-error test contains four problems:
 
-### 9.4 Multi-Error Example
-
-The following program has four semantic errors. The analyzer reports all four:
-
-```
+```text
 int a;
-int a;         // S2: redeclaration
+int a;
 bool flag;
-a = true;      // S4: cannot assign bool to int
-flag = a;      // S4: cannot assign int to bool
-print z;       // S1: undeclared variable
+a = true;
+flag = a;
+print z;
 ```
 
-Output:
+The output contains four diagnostics: redeclaration, two incompatible
+assignments, and one undeclared identifier. The GUI displays four rows and
+four corresponding editor markers.
 
-```
-Semantic Error [line 2, col 5]: Redeclaration of variable 'a' (already declared at line 1)
-  --> hint: choose a different name, or remove the duplicate declaration
-Semantic Error [line 4, col 1]: Cannot assign 'bool' to variable 'a' of type 'int'
-  --> hint: 'a' is 'int'; a 'bool' value cannot be used here
-Semantic Error [line 5, col 1]: Cannot assign 'int' to variable 'flag' of type 'bool'
-  --> hint: 'flag' is 'bool'; assign 'true' or 'false'
-Semantic Error [line 6, col 7]: Undeclared variable 'z'
-  --> hint: declare it before use, e.g. 'int z;'
-4 error(s) found.
-```
+### 9.5 Suppression of later phases
+
+If parsing failed, semantic analysis is not started. If semantic analysis
+added errors, TAC generation is not started. This prevents invalid programs
+from producing misleading intermediate code.
 
 ---
 
 ## 10. Intermediate Code Generation
 
-### 10.1 TAC Instruction Set
+### 10.1 Purpose
 
-The TAC generator (`src/tac/tac_generator.cpp`) emits instructions from the
-following set. Each instruction has at most three fields: result, arg1, arg2.
+Three Address Code is a linear representation in which each instruction
+contains at most one operator. It separates source-language structure from
+machine-specific concerns and is suitable for later optimization or backend
+translation, although those later phases are outside this project.
 
-| Instruction | Printed form | Meaning |
-|---|---|---|
-| AssignInt/Float/Bool | `result = literal` | Assign a literal value |
-| Copy | `result = arg1` | Copy a value |
-| CastFloat | `result = (float) arg1` | Widen int to float |
-| Add/Sub/Mul/Div/Mod | `result = arg1 op arg2` | Arithmetic |
-| Lt/Gt/Le/Ge/Eq/Neq | `result = arg1 op arg2` | Relational (result is bool) |
-| Neg | `result = -arg1` | Unary negation |
-| Not | `result = !arg1` | Logical negation |
-| Label | `L:` | Label definition |
-| Goto | `goto L` | Unconditional jump |
-| IfFalse | `ifFalse x goto L` | Jump if condition is false |
-| IfTrue | `ifTrue x goto L` | Jump if condition is true |
-| Print | `print arg1` | Output a value |
+### 10.2 Instruction forms
 
-### 10.2 Expression Generation
+The TAC model supports:
 
-Literal nodes and identifier nodes set `currentResult_` to their string
-representation without emitting any instruction. A binary expression node
-reads both operands' results and emits one instruction into a new temporary:
-
-**Source:** `c = a + b * 2;`
-
-**Generated TAC:**
-```
-    t1 = b * 2
-    t2 = a + t1
-    c = t2
+```text
+x = literal
+x = y
+x = y op z
+x = op y
+x = (float) y
+ifTrue x goto L
+ifFalse x goto L
+goto L
+L:
+print x
 ```
 
-This matches the illustrative example in Project Manual §4.6 exactly.
+Temporary variables are named `t1`, `t2`, and so on. Labels are named `L1`,
+`L2`, and so on. Counters start fresh for each compilation.
 
-### 10.3 Control Flow Patterns
+### 10.3 Expressions
 
-**if statement:**
-```
-[evaluate condition → t]
-    ifFalse t goto L_end
-    [then-body TAC]
-L_end:
+The generator recursively evaluates operands and emits an instruction for the
+current operator.
+
+Source:
+
+```text
+c = a + b * 2;
 ```
 
-**if-else statement:**
+TAC:
+
+```text
+t1 = b * 2
+t2 = a + t1
+c = t2
 ```
-[evaluate condition → t]
-    ifFalse t goto L_else
-    [then-body TAC]
-    goto L_end
+
+### 10.4 Assignment widening
+
+An integer assigned to a float target generates an explicit cast:
+
+```text
+int n;
+float f;
+n = 4;
+f = n;
+```
+
+```text
+n = 4
+t1 = (float) n
+f = t1
+```
+
+### 10.5 Branches
+
+An `if-else` statement uses an else label and an end label:
+
+```text
+[condition code]
+ifFalse condition goto L_else
+[then code]
+goto L_end
 L_else:
-    [else-body TAC]
+[else code]
 L_end:
 ```
 
-**while loop:**
-```
+### 10.6 Loops
+
+A `while` statement uses a beginning label, a false exit, and a back jump:
+
+```text
 L_begin:
-[evaluate condition → t]
-    ifFalse t goto L_end
-    [body TAC]
-    goto L_begin
+[condition code]
+ifFalse condition goto L_end
+[body code]
+goto L_begin
 L_end:
 ```
 
-### 10.4 Short-Circuit Logical Evaluation
+The condition code is inside the loop so it is recomputed on each iteration.
 
-`&&` and `||` are not evaluated eagerly. If the left operand of `&&` is
-false, the right operand is never evaluated. This matches the semantics of
-all modern languages and avoids side effects in the right operand when the
-left already determines the result.
+### 10.7 Short-circuit logical expressions
 
-**`a && b` generates:**
-```
-    ifFalse a goto L_false
-    ifFalse b goto L_false
-    t = true
-    goto L_end
+`&&` and `||` are generated through conditional jumps rather than eager
+binary instructions.
+
+For `a && b`, the right side is skipped when `a` is false:
+
+```text
+ifFalse a goto L_false
+ifFalse b goto L_false
+t1 = true
+goto L_end
 L_false:
-    t = false
+t1 = false
 L_end:
 ```
 
-**`a || b` generates:**
-```
-    ifTrue a goto L_true
-    ifTrue b goto L_true
-    t = false
-    goto L_end
+For `a || b`, the right side is skipped when `a` is true:
+
+```text
+ifTrue a goto L_true
+ifTrue b goto L_true
+t1 = false
+goto L_end
 L_true:
-    t = true
+t1 = true
 L_end:
 ```
 
-### 10.5 Full Example
+### 10.8 Complete sample output
 
-**Source program (`examples/sample.mc`):**
-```
-int x;
-int y;
-bool flag;
-x = 10;
-y = 0;
-flag = true;
-while (x > 0) {
-    y = y + x;
-    x = x - 1;
-}
-if (flag == true) {
-    print y;
-} else {
-    print x;
-}
-```
+The sample program generates:
 
-**Generated TAC:**
-```
+```text
+; === Three Address Code: examples/sample.mc ===
+
     x = 10
     y = 0
     flag = true
@@ -801,199 +1002,302 @@ L3:
 L4:
 ```
 
-The while loop becomes a back-jumping loop starting at `L1`. The if-else
-branches jump over each other using `L3` and `L4`.
-
-### 10.6 Widening Cast
-
-When an `int` value is assigned to a `float` variable, the TAC generator
-emits an explicit cast instruction:
-
-```
-int n;
-float f;
-n = 4;
-f = n;
-```
-
-Generates:
-```
-    n = 4
-    t1 = (float) n
-    f = t1
-```
-
-This makes the type conversion visible in the intermediate representation,
-which is important for a real back-end that would need to emit a different
-machine instruction for integer and floating-point moves.
+Ten TAC programs are compared character-for-character with golden `.tac`
+files.
 
 ---
 
 ## 11. Challenges
 
-### Challenge 1: Stale Object Files After AST Change
+### 11.1 Grammar conflicts and recovery
 
-When `targetType` was added to `AssignmentNode` in Phase 6, some object
-files were compiled with the old smaller struct layout while others used the
-new larger layout. The mismatch caused heap corruption at runtime:
-`free(): invalid pointer` when the program exited cleanly.
+Expression ambiguity and dangling `else` can introduce shift/reduce
+conflicts. Precedence declarations resolved the expression grammar, while a
+separate precedence pair implemented nearest-`if` binding. Recovery rules also
+had to synchronize at useful tokens without creating new ambiguity.
 
-**Resolution:** Added `-MMD -MP` flags to the compiler invocation. These
-flags make GCC write a `.d` dependency file alongside every `.o` file. The
-Makefile includes these files with `-include $(OBJS:.o=.d)`, so any change
-to any header automatically triggers recompilation of every object that
-includes it. A subsequent `make clean && make` cleared the corruption.
+The build treats conflicts as errors and enables Bison counterexamples. This
+turned parser ambiguity into a visible build-time problem rather than a hidden
+runtime behavior.
 
-**Lesson:** Header dependency tracking is not optional in a multi-file C++
-project. Object files compiled against different versions of a struct layout
-corrupt each other's heap.
+### 11.2 Precise locations across Flex and Bison
 
-### Challenge 2: Grammar Conflicts
+Line tracking alone was insufficient for editor navigation and useful
+diagnostics. Flex and Bison needed to share the same location representation.
+The solution combined `YY_USER_ACTION`, custom newline handling, `%locations`,
+and a custom `YYLTYPE`.
 
-An early version of the error-recovery grammar had two recovery productions
-that could both apply inside a block. Bison reported one shift/reduce conflict
-and printed a counterexample derivation showing the ambiguity. The fix was to
-anchor the block-level recovery rule *after* `stmt_list`, so the lookahead
-token (`;` vs `}`) could distinguish the two cases. This reduced the conflict
-count to zero.
+### 11.3 Malformed-number recovery
 
-**Lesson:** Bison's `-Wcounterexamples` flag is essential for diagnosing
-conflicts. It prints the two derivations that cause the conflict, making the
-source of the ambiguity immediately obvious.
+Without dedicated patterns, an input such as `1.2.3` could be split into
+several apparently valid tokens and cause a confusing parser error. Longer
+malformed-input rules were placed before the valid numeric rules so the scanner
+could diagnose the real lexical problem.
 
-### Challenge 3: CRLF Line Endings on Windows
+### 11.4 AST memory ownership
 
-Development on Windows (via WSL2) caused `scripts/run_tests.sh` to receive
-`\r\n` line endings from a Windows editor, making bash refuse to execute it
-with the error `bad interpreter: /bin/bash^M`. The fix was
-`git config --global core.autocrlf input`, which prevents Git from converting
-line endings on checkout.
+The Bison parser creates raw AST pointers in semantic actions. Both normal tree
+destruction and error-recovery discards had to be handled. Virtual destructors,
+parent ownership, and Bison `%destructor` declarations provided a consistent
+ownership policy.
 
-### Challenge 4: Lexer-Parser Integration
+### 11.5 Header dependency tracking
 
-The Flex-generated scanner and the Bison-generated parser must agree on token
-codes, the `YYSTYPE` union, and the `yylval` global. In Phase 2, the lexer
-was built standalone using a custom `tokens.hpp` header. In Phase 3, when the
-Bison grammar was added, the lexer needed to switch from `tokens.hpp` to the
-Bison-generated `parser.tab.hpp`. This was handled by changing a single
-`#include` directive, because the token codes were designed to match from the
-start. The transition was zero-defect.
+Changing an AST class layout while keeping stale object files can produce
+binary incompatibility and heap corruption. The Makefile uses `-MMD -MP` and
+includes generated dependency files so changes to public headers recompile all
+affected objects. A clean build remains the recommended final verification.
+
+### 11.6 Cross-platform golden outputs
+
+TAC headings contain the source path. Windows and Linux use different path
+separators, and line endings may also differ. Repository tests use stable
+relative forward-slash paths. The Python regression runner normalizes line
+endings while retaining exact semantic content.
+
+### 11.7 Responsive GUI execution
+
+Running `make`, four compiler modes, or 42 regression checks directly in the
+Tk main loop would freeze the interface. The GUI therefore executes those
+operations in worker threads and returns result objects through a queue.
+Widget updates occur only on the Tk main thread.
+
+### 11.8 Structured output without changing the compiler
+
+The CLI was already the verified source of truth. The GUI needed tables and
+trees without modifying the compiler output contract. Dedicated Python parsers
+convert the existing token, AST, symbol-table, and TAC text into structured
+views while preserving raw output for copying and comparison.
 
 ---
 
 ## 12. Testing
 
-### 12.1 Test Suite Overview
+### 12.1 Testing strategy
 
-The test suite contains **42 test programs** covering every category required
-by Project Manual §15.
+Testing combines exit-code checks, absence or presence of diagnostics, and
+exact golden-output comparison.
 
-| Category | Count | How validated |
-|---|---|---|
-| Valid programs (exit 0, no diagnostics) | 10 | Exit code + empty stderr |
-| TAC golden output | 10 | Diff against frozen `.tac` file |
-| Lexical error programs | 4 | Diff against frozen `.err` file |
-| Syntax error programs | 4 | Diff against frozen `.err` file |
-| Semantic error programs | 9 | Diff against frozen `.err` file |
-| **Total** | **42** | |
+- A valid compilation must return 0 and produce no standard-error output.
+- An invalid test must return 1 and match its `.err` file exactly.
+- A TAC test must return 0 and match its `.tac` file exactly.
+- The GUI backend self-test must successfully exercise all four inspection
+  modes.
+- The GUI regression dashboard must reproduce the complete 42-check suite.
 
-### 12.2 Regression Strategy
+### 12.2 Accurate test inventory
 
-Every test that produces output is paired with a **golden file**. The
-regression runner (`scripts/run_tests.sh`) runs the compiler on each test
-program and diffs the actual output against the golden file character by
-character. Any difference — including a changed line number, a reworded hint,
-or an extra blank line — fails the test. This ensures that a change to any
-phase does not silently change the output of another phase.
+The repository contains 32 distinct MiniLang source programs. Ten valid TAC
+programs are each tested twice: once for successful compilation and once for
+exact TAC output. Therefore, there are 42 checks, not 42 distinct programs.
 
-Golden files are regenerated deliberately whenever the output format is
-intentionally changed, and the regeneration is committed as its own commit
-with a message explaining why the format changed.
+| Check category | Count |
+|---|---:|
+| Valid compilation in `tests/valid` and `examples` | 15 |
+| Lexical diagnostic comparisons | 4 |
+| Syntax diagnostic comparisons | 4 |
+| Semantic diagnostic comparisons | 9 |
+| TAC golden-output comparisons | 10 |
+| **Total** | **42** |
 
-### 12.3 Semantic Error Coverage
+The 17 invalid checks consist of 4 lexical, 4 syntax, and 9 semantic cases.
 
-Every error class listed in Project Manual §4.5 has a dedicated test program:
+### 12.3 Coverage
 
-| Error class | Test file |
-|---|---|
-| Undeclared variable (S1) | `undeclared_variable.mc` |
-| Redeclaration (S2) | `redeclaration.mc` |
-| Scope violation (S3) | `scope_violation.mc` |
-| Type mismatch (S4) | `type_mismatch.mc` |
-| Invalid arithmetic expression (S5) | `invalid_expression_arith.mc` |
-| Invalid logical expression (S6) | `invalid_expression_logical.mc` |
-| Invalid equality comparison (S7) | `invalid_equality.mc` |
-| Invalid condition type (S8) | `invalid_condition.mc` |
-| Multiple errors in one file | `multiple_errors.mc` |
+Valid programs cover:
 
-### 12.4 Test Results
+- complete token recognition;
+- nested blocks and dangling `else`;
+- scope creation and legal shadowing;
+- valid semantic combinations;
+- arithmetic and precedence;
+- integer-to-float casts;
+- unary operations;
+- relational and logical expressions;
+- modulus;
+- nested branches;
+- nested loops;
+- `while`; and
+- the manual-aligned sample program.
 
-```
+Invalid programs cover:
+
+- unsupported characters;
+- invalid identifiers and near-miss operators;
+- malformed numbers;
+- unterminated comments;
+- missing semicolons;
+- unbalanced parentheses;
+- stray `else`;
+- multiple syntax errors;
+- undeclared variables;
+- redeclaration;
+- scope violations;
+- type mismatch;
+- invalid arithmetic;
+- invalid logical expressions;
+- invalid equality;
+- invalid condition types; and
+- multiple semantic errors.
+
+### 12.4 Test commands
+
+```bash
+make clean
+make
 make test
+```
 
-PASS  valid    tests/valid/tac_complete.mc
-PASS  valid    tests/valid/tac_arithmetic.mc
-PASS  valid    tests/valid/tac_while.mc
-...
-PASS  invalid  tests/invalid/semantic/multiple_errors.mc
-PASS  tac      tests/valid/tac_logical.mc
+Direct execution is also available:
+
+```bash
+./scripts/run_tests.sh
+```
+
+GUI verification uses:
+
+```bash
+python3 -m compileall -q gui run_gui.py
+python3 run_gui.py --self-test
+python3 run_gui.py
+```
+
+Inside the GUI, `Ctrl+T` runs the dashboard suite.
+
+### 12.5 Verified results
+
+The command-line suite produced:
+
+```text
 ----------------------------------------
 42 passed, 0 failed
 ```
+
+The backend self-test produced successful results for:
+
+```text
+PASS  tokens
+PASS  ast
+PASS  symtab
+PASS  tac
+GUI backend self-test passed.
+```
+
+The integrated GUI dashboard also completed with 42 passed and 0 failed. The
+semantic multi-error scenario produced four diagnostics and four editor
+markers.
+
+### 12.6 Reproducibility and repository cleanliness
+
+Before a final commit or submission archive:
+
+```bash
+rm -rf -- __pycache__ gui/__pycache__
+rm -f -- output.tac
+git status --short
+```
+
+Generated parser, scanner, object, dependency, and executable files belong in
+`build/`. The test script must retain executable permission on Linux.
 
 ---
 
 ## 13. Conclusion
 
-This project produced a complete, working compiler front-end for MiniLang.
-Every phase from lexical analysis to TAC generation is implemented, tested,
-and integrated into a single pipeline.
+### 13.1 Achievement summary
 
-The most important insight from building this compiler is that the phases
-are not independent. The lexer's token locations are read by the parser's
-error messages. The parser's AST is walked by the semantic analyzer, which
-annotates it with type information. The TAC generator reads those type
-annotations to decide whether to emit cast instructions. Each phase depends
-on the contract established by the previous one, and a bug in any phase
-propagates in ways that are hard to debug without understanding the whole
-pipeline.
+The project successfully implements all six mandatory compiler phases. Flex
+recognizes the complete MiniLang token set and provides exact locations. Bison
+validates the grammar, resolves precedence and dangling `else`, and builds the
+AST. The symbol table models nested lexical scopes. The semantic analyzer
+enforces declaration, scope, assignment, expression, comparison, logical, and
+condition rules. The TAC generator translates validated programs into a clear
+intermediate representation with temporaries, labels, casts, branches, loops,
+and short-circuit logic.
 
-The visitor pattern proved essential for keeping the phases decoupled. The
-AST does not know anything about semantic analysis or TAC generation. Adding
-the TAC generator in Phase 6 required no changes to the AST nodes, because
-the visitor interface already had the right shape. This is what clean
-architecture buys: future changes become easier rather than harder.
+The architecture keeps responsibilities separated. The AST is shared without
+coupling it to semantic analysis or code generation. Diagnostics are collected
+through one interface. The CLI remains the authoritative compiler. The GUI is
+a separate, responsive client that presents compiler output in an accessible
+form.
 
-The most difficult problem encountered was the heap corruption caused by
-stale object files after a struct layout change. It produced a runtime crash
-with no obvious connection to the actual source of the problem. The fix —
-automatic header dependency tracking — is a standard feature of professional
-build systems that the project now uses.
+### 13.2 Learning outcomes
 
-Building this compiler provided a hands-on understanding of topics that
-are difficult to grasp from lectures alone: why context-free grammars
-have the shape they do, why the shift-reduce parsing algorithm works, what
-it means for a type system to be sound, and why intermediate representations
-like TAC exist as a layer between the source language and the target machine.
+The implementation provided practical experience with:
+
+- regular-expression design and longest-match behavior;
+- LR parsing and conflict resolution;
+- syntax-error recovery;
+- AST ownership and the visitor pattern;
+- nested symbol lookup and shadowing;
+- static type checking;
+- propagation and suppression of semantic errors;
+- control-flow lowering into TAC;
+- short-circuit Boolean generation;
+- build dependency management;
+- golden-file regression testing; and
+- thread-safe desktop integration with a command-line backend.
+
+### 13.3 Limitations
+
+The implemented system intentionally stops at TAC. It does not include:
+
+- arrays;
+- functions and return statements;
+- `for`, `do-while`, or `switch`;
+- increment/decrement operators;
+- constant folding;
+- dead-code elimination;
+- assembly or machine-code generation;
+- register allocation;
+- Graphviz AST export;
+- compiler-native uninitialized-variable warnings; or
+- compile-time division-by-zero warnings.
+
+These are optional future extensions and are not required for the completed
+base compiler.
+
+### 13.4 Future work
+
+The safest future improvements are independent visitors or new compiler
+passes, such as Graphviz AST export and constant folding. Any language syntax
+extension should be documented separately so the instructor-defined base
+grammar remains stable.
+
+The GUI could later gain detachable docking if migrated to a toolkit with
+native dock support. The current Tkinter implementation instead provides
+resizable and independently hideable panels.
+
+### 13.5 Final result
+
+The accurate final statement is:
+
+> The MiniLang compiler implements all mandatory compiler phases and an
+> optional professional Tkinter interface. It is verified by 42 passing checks
+> over 32 distinct MiniLang programs. TAC is the final generated
+> representation, and no unimplemented bonus feature is claimed as complete.
 
 ---
 
 ## 14. References
 
-1. Aho, A. V., Lam, M. S., Sethi, R., & Ullman, J. D. (2006).
-   *Compilers: Principles, Techniques, and Tools* (2nd ed.).
-   Addison-Wesley. (The "Dragon Book" — the standard reference for all
-   compiler phases covered in this project.)
+1. Aho, A. V., Lam, M. S., Sethi, R., and Ullman, J. D. *Compilers:
+   Principles, Techniques, and Tools*. 2nd edition. Addison-Wesley, 2006.
 
-2. Levine, J., Mason, T., & Brown, D. (1992).
-   *lex & yacc* (2nd ed.). O'Reilly Media.
+2. Levine, J. R., Mason, T., and Brown, D. *lex & yacc*. 2nd edition.
+   O'Reilly Media, 1992.
 
-3. GNU Flex Manual. Free Software Foundation.
-   https://www.gnu.org/software/flex/manual/
+3. Free Software Foundation. *GNU Bison Manual*.
 
-4. GNU Bison Manual. Free Software Foundation.
-   https://www.gnu.org/software/bison/manual/
+4. Free Software Foundation. *Flex: The Fast Lexical Analyzer Manual*.
 
-5. Metropolitan University, Bangladesh. (2026).
-   *Compiler Construction Lab: Project Manual.*
-   Department of Computer Science and Engineering.
+5. ISO/IEC. *Programming Languages — C++*, ISO/IEC 14882.
+
+6. Python Software Foundation. *Python Standard Library Documentation:
+   tkinter — Python interface to Tcl/Tk*.
+
+7. Metropolitan University, Department of Computer Science and Engineering.
+   *Compiler Construction Lab Project Manual*, 2026.
+
+8. MiniLang project repository. Source code, tests, architecture notes, and
+   implementation documentation.
