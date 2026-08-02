@@ -14,6 +14,13 @@ from .code_editor import CodeEditor
 from .compiler_runner import CompilerResult, CompilerRunner
 from .diagnostics import Diagnostic, DiagnosticsView, parse_diagnostics
 from .examples import DEFAULT_EXAMPLE, EXAMPLES
+from .output_views import (
+    ASTTreeView,
+    StructuredOutputView,
+    SymbolTableView,
+    TACTableView,
+    TokenTableView,
+)
 from .test_catalog import TestCase, TestCatalog
 from .theme import COLORS, ThemeFonts, apply_theme
 from .widgets import OutputView, PipelineStrip
@@ -374,30 +381,44 @@ class MiniLangIDE(tk.Tk):
 
         self.output_notebook = ttk.Notebook(panel)
         self.output_notebook.grid(row=1, column=0, sticky="nsew")
-        definitions = (
-            ("tac", "TAC Output", ".tac"),
-            ("build", "Build Log", ".txt"),
-            ("tokens", "Tokens", ".txt"),
-            ("ast", "AST", ".txt"),
-            ("symtab", "Symbol Table", ".txt"),
-            ("expected", "Expected Output", ".txt"),
+        self.output_views: dict[str, OutputView | StructuredOutputView] = {}
+
+        tac_view = TACTableView(self.output_notebook, self.fonts)
+        self.output_notebook.add(tac_view, text="TAC Output")
+        self.output_views["tac"] = tac_view
+
+        self.diagnostics_view = DiagnosticsView(
+            self.output_notebook,
+            self.fonts,
+            on_activate=self._activate_diagnostic,
         )
-        self.output_views: dict[str, OutputView] = {}
-        for index, (key, caption, extension) in enumerate(definitions):
-            view = OutputView(
-                self.output_notebook, self.fonts, save_extension=extension
-            )
-            self.output_notebook.add(view, text=caption)
-            self.output_views[key] = view
-            if index == 0:
-                self.diagnostics_view = DiagnosticsView(
-                    self.output_notebook,
-                    self.fonts,
-                    on_activate=self._activate_diagnostic,
-                )
-                self.output_notebook.add(
-                    self.diagnostics_view, text="Diagnostics"
-                )
+        self.output_notebook.add(self.diagnostics_view, text="Diagnostics")
+
+        build_view = OutputView(self.output_notebook, self.fonts)
+        self.output_notebook.add(build_view, text="Build Log")
+        self.output_views["build"] = build_view
+
+        token_view = TokenTableView(
+            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
+        )
+        self.output_notebook.add(token_view, text="Tokens")
+        self.output_views["tokens"] = token_view
+
+        ast_view = ASTTreeView(
+            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
+        )
+        self.output_notebook.add(ast_view, text="AST")
+        self.output_views["ast"] = ast_view
+
+        symbol_view = SymbolTableView(
+            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
+        )
+        self.output_notebook.add(symbol_view, text="Symbol Table")
+        self.output_views["symtab"] = symbol_view
+
+        expected_view = OutputView(self.output_notebook, self.fonts)
+        self.output_notebook.add(expected_view, text="Expected Output")
+        self.output_views["expected"] = expected_view
         return panel
 
     def _build_statusbar(self, parent: ttk.Frame) -> None:
@@ -1043,6 +1064,10 @@ class MiniLangIDE(tk.Tk):
             f"column {diagnostic.column}"
         )
 
+    def _navigate_to_location(self, line: int, column: int) -> None:
+        self.editor.goto_location(line, column)
+        self.compiler_status.set(f"Navigated to line {line}, column {column}")
+
     def _focus_output(self) -> None:
         current = self.output_notebook.select()
         if current:
@@ -1050,6 +1075,8 @@ class MiniLangIDE(tk.Tk):
             if isinstance(widget, OutputView):
                 widget.text.focus_set()
             elif isinstance(widget, DiagnosticsView):
+                widget.focus_view()
+            elif isinstance(widget, StructuredOutputView):
                 widget.focus_view()
 
     def _show_about(self) -> None:
