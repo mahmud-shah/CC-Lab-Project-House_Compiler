@@ -12,6 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .code_editor import CodeEditor
 from .compiler_runner import CompilerResult, CompilerRunner
+from .diagnostics import Diagnostic, DiagnosticsView, parse_diagnostics
 from .examples import DEFAULT_EXAMPLE, EXAMPLES
 from .test_catalog import TestCase, TestCatalog
 from .theme import COLORS, ThemeFonts, apply_theme
@@ -116,6 +117,26 @@ class MiniLangIDE(tk.Tk):
         edit_menu.add_command(label="Copy", accelerator="Ctrl+C", command=lambda: self._editor_event("<<Copy>>"))
         edit_menu.add_command(label="Paste", accelerator="Ctrl+V", command=lambda: self._editor_event("<<Paste>>"))
         edit_menu.add_command(label="Select All", accelerator="Ctrl+A", command=self._select_all)
+        edit_menu.add_separator()
+        edit_menu.add_command(
+            label="Find...",
+            accelerator="Ctrl+F",
+            command=lambda: self.editor.show_find_replace(False),
+        )
+        edit_menu.add_command(
+            label="Replace...",
+            accelerator="Ctrl+H",
+            command=lambda: self.editor.show_find_replace(True),
+        )
+        edit_menu.add_command(
+            label="Go to Line...",
+            accelerator="Ctrl+G",
+            command=self.editor_goto_safe,
+        )
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Zoom In", accelerator="Ctrl++", command=self.editor_zoom_in_safe)
+        edit_menu.add_command(label="Zoom Out", accelerator="Ctrl+-", command=self.editor_zoom_out_safe)
+        edit_menu.add_command(label="Reset Zoom", accelerator="Ctrl+0", command=self.editor_zoom_reset_safe)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
 
         build_menu = tk.Menu(menu_bar)
@@ -328,7 +349,9 @@ class MiniLangIDE(tk.Tk):
             heading, textvariable=self.path_heading, style="Muted.TLabel"
         ).grid(row=0, column=1, sticky="e")
 
-        self.editor = CodeEditor(panel, on_change=self._editor_changed)
+        self.editor = CodeEditor(
+            panel, on_change=self._editor_changed, fonts=self.fonts
+        )
         self.editor.grid(row=1, column=0, sticky="nsew")
         return panel
 
@@ -353,7 +376,6 @@ class MiniLangIDE(tk.Tk):
         self.output_notebook.grid(row=1, column=0, sticky="nsew")
         definitions = (
             ("tac", "TAC Output", ".tac"),
-            ("diagnostics", "Diagnostics", ".txt"),
             ("build", "Build Log", ".txt"),
             ("tokens", "Tokens", ".txt"),
             ("ast", "AST", ".txt"),
@@ -361,14 +383,21 @@ class MiniLangIDE(tk.Tk):
             ("expected", "Expected Output", ".txt"),
         )
         self.output_views: dict[str, OutputView] = {}
-        self.output_tabs: dict[str, OutputView] = {}
-        for key, caption, extension in definitions:
+        for index, (key, caption, extension) in enumerate(definitions):
             view = OutputView(
                 self.output_notebook, self.fonts, save_extension=extension
             )
             self.output_notebook.add(view, text=caption)
             self.output_views[key] = view
-            self.output_tabs[key] = view
+            if index == 0:
+                self.diagnostics_view = DiagnosticsView(
+                    self.output_notebook,
+                    self.fonts,
+                    on_activate=self._activate_diagnostic,
+                )
+                self.output_notebook.add(
+                    self.diagnostics_view, text="Diagnostics"
+                )
         return panel
 
     def _build_statusbar(self, parent: ttk.Frame) -> None:
@@ -587,11 +616,15 @@ class MiniLangIDE(tk.Tk):
         self.source_label = source_label
         self._set_dirty(dirty)
         self.pipeline.reset()
+        if hasattr(self, "diagnostics_view"):
+            self.diagnostics_view.clear("No diagnostics for this source")
         self.editor.focus_editor()
 
     def _editor_changed(self) -> None:
         if not self._loading_content:
             self._set_dirty(True)
+            if hasattr(self, "diagnostics_view"):
+                self.diagnostics_view.clear("Source changed - run the compiler again")
         self._update_cursor_status()
 
     def _set_dirty(self, value: bool) -> None:
@@ -830,17 +863,36 @@ class MiniLangIDE(tk.Tk):
                 unique_errors.append(error_text)
 
         diagnostics = ["PIPELINE SUMMARY", "================", *status_lines]
-        if unique_errors:
-            diagnostics.extend(("", "COMPILER DIAGNOSTICS", "====================", *unique_errors))
+        diagnostic_sources = list(unique_errors)
+        for result in results.values():
+            if not result.ok and " Error [line " in result.stdout:
+                diagnostic_sources.append(result.stdout.strip())
+        parsed_diagnostics = tuple(
+            dict.fromkeys(parse_diagnostics("\n\n".join(diagnostic_sources)))
+        )
+        if diagnostic_sources:
+            diagnostics.extend(("", "COMPILER DIAGNOSTICS", "===================="))
+            if unique_errors:
+                diagnostics.extend(unique_errors)
+            else:
+                for item in parsed_diagnostics:
+                    diagnostics.append(
+                        f"{item.phase} {item.severity} [line {item.line}, "
+                        f"col {item.column}]: {item.message}"
+                    )
+                    if item.hint:
+                        diagnostics.append(f"  --> hint: {item.hint}")
         else:
             diagnostics.extend(("", "No compiler errors or warnings were reported."))
-        self.output_views["diagnostics"].set_content(
-            "\n".join(diagnostics) + "\n",
-            "success" if all_successful else "error",
+        diagnostic_report = "\n".join(diagnostics) + "\n"
+        self.diagnostics_view.set_diagnostics(
+            parsed_diagnostics,
+            diagnostic_report,
         )
+        self.editor.set_diagnostics(parsed_diagnostics)
 
         token_count = self._extract_token_count(results)
-        error_count = self._extract_error_count(results)
+        error_count = len(parsed_diagnostics) or self._extract_error_count(results)
         self.metrics_status.set(
             f"Tokens {token_count}  |  Errors {error_count}  |  Warnings 0"
         )
@@ -851,12 +903,13 @@ class MiniLangIDE(tk.Tk):
                 self.output_notebook.select(self.output_views["tac"])
         else:
             self.compiler_status.set(f"Pipeline finished with {error_count or 1} error(s)")
-            self.output_notebook.select(self.output_views["diagnostics"])
+            self.output_notebook.select(self.diagnostics_view)
         self._end_work()
 
     def _show_worker_error(self, message: str) -> None:
-        self.output_views["diagnostics"].set_content(message + "\n", "error")
-        self.output_notebook.select(self.output_views["diagnostics"])
+        self.diagnostics_view.set_message(message)
+        self.editor.clear_diagnostics()
+        self.output_notebook.select(self.diagnostics_view)
         self.compiler_status.set("Internal GUI worker error")
         self._end_work()
 
@@ -910,7 +963,6 @@ class MiniLangIDE(tk.Tk):
     def _clear_outputs(self) -> None:
         messages = {
             "tac": "Run TAC generation to view intermediate code.\n",
-            "diagnostics": "Compiler diagnostics and phase summaries will appear here.\n",
             "build": "Run Build Compiler to capture the Makefile output.\n",
             "tokens": "Run Lexical Analysis to view the token stream.\n",
             "ast": "Run Parser / AST to view the abstract syntax tree.\n",
@@ -918,6 +970,8 @@ class MiniLangIDE(tk.Tk):
         }
         for key, message in messages.items():
             self.output_views[key].set_content(message)
+        self.diagnostics_view.clear("No diagnostics")
+        self.editor.clear_diagnostics()
         if self.current_test is not None:
             self._show_expected_output(self.current_test)
         else:
@@ -939,6 +993,9 @@ class MiniLangIDE(tk.Tk):
         self.bind("<Control-Key-3>", lambda _event: self._run_mode("symtab"))
         self.bind("<Control-Key-4>", lambda _event: self._run_mode("tac"))
         self.bind("<Control-a>", lambda _event: self._select_all())
+        self.bind("<Control-f>", lambda _event: self.editor.show_find_replace(False))
+        self.bind("<Control-h>", lambda _event: self.editor.show_find_replace(True))
+        self.bind("<Control-g>", lambda _event: self.editor.show_goto_line())
         self.bind_all("<KeyRelease>", self._update_cursor_status, add="+")
         self.bind_all("<ButtonRelease-1>", self._update_cursor_status, add="+")
 
@@ -963,12 +1020,37 @@ class MiniLangIDE(tk.Tk):
         if hasattr(self, "editor"):
             self.editor.focus_editor()
 
+    def editor_goto_safe(self) -> None:
+        if hasattr(self, "editor"):
+            self.editor.show_goto_line()
+
+    def editor_zoom_in_safe(self) -> None:
+        if hasattr(self, "editor"):
+            self.editor.zoom_in()
+
+    def editor_zoom_out_safe(self) -> None:
+        if hasattr(self, "editor"):
+            self.editor.zoom_out()
+
+    def editor_zoom_reset_safe(self) -> None:
+        if hasattr(self, "editor"):
+            self.editor.reset_zoom()
+
+    def _activate_diagnostic(self, diagnostic: Diagnostic) -> None:
+        self.editor.goto_diagnostic(diagnostic)
+        self.compiler_status.set(
+            f"{diagnostic.phase} error at line {diagnostic.line}, "
+            f"column {diagnostic.column}"
+        )
+
     def _focus_output(self) -> None:
         current = self.output_notebook.select()
         if current:
             widget = self.nametowidget(current)
             if isinstance(widget, OutputView):
                 widget.text.focus_set()
+            elif isinstance(widget, DiagnosticsView):
+                widget.focus_view()
 
     def _show_about(self) -> None:
         messagebox.showinfo(
