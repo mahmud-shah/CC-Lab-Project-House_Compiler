@@ -135,6 +135,23 @@ def apply_theme(root: tk.Misc) -> ThemeFonts:
         bordercolor=[("focus", COLORS.accent), ("active", COLORS.accent)],
     )
     style.configure(
+        "Compact.TButton",
+        background=COLORS.surface_raised,
+        foreground=COLORS.muted,
+        bordercolor=COLORS.border_soft,
+        lightcolor=COLORS.surface_raised,
+        darkcolor=COLORS.surface_raised,
+        padding=(7, 4),
+        font=(fonts.ui, 8),
+        relief="flat",
+    )
+    style.map(
+        "Compact.TButton",
+        background=[("active", COLORS.surface_hover), ("pressed", COLORS.accent_dark)],
+        foreground=[("active", COLORS.text), ("disabled", COLORS.muted)],
+        bordercolor=[("focus", COLORS.accent), ("active", COLORS.border)],
+    )
+    style.configure(
         "Accent.TButton",
         background=COLORS.accent_active,
         foreground="#ffffff",
@@ -242,4 +259,13 @@ def apply_theme(root: tk.Misc) -> ThemeFonts:
     )
     style.configure("TPanedwindow", background=COLORS.border_soft, sashwidth=5)
     style.configure("TSeparator", background=COLORS.border)
+    style.configure(
+        "Horizontal.TProgressbar",
+        background=COLORS.accent_active,
+        troughcolor=COLORS.background_deep,
+        bordercolor=COLORS.background_deep,
+        lightcolor=COLORS.accent,
+        darkcolor=COLORS.accent_active,
+        thickness=6,
+    )
     return fonts
