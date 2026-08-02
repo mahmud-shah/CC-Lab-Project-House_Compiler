@@ -226,11 +226,11 @@ class MiniLangIDE(tk.Tk):
         title_area = ttk.Frame(header, style="App.TFrame")
         title_area.grid(row=0, column=0, sticky="w")
         ttk.Label(title_area, text=APP_NAME, style="Title.TLabel").pack(anchor="w")
-        ttk.Label(
-            title_area,
-            text="Flex + Bison front-end  /  instructor-defined MiniLang specification",
-            style="Subtitle.TLabel",
-        ).pack(anchor="w")
+        # ttk.Label(
+        #     title_area,
+        #     text="Flex + Bison front-end  /  instructor-defined MiniLang specification",
+        #     style="Subtitle.TLabel",
+        # ).pack(anchor="w")
 
         metrics = ttk.Frame(header, style="App.TFrame")
         metrics.grid(row=0, column=1, sticky="e")
