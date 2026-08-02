@@ -21,6 +21,8 @@ from .output_views import (
     TACTableView,
     TokenTableView,
 )
+from .polish import ActivityIndicator, ToolTip, create_toolbar_icons
+from .project_explorer import ProjectExplorer
 from .settings import AppSettings, SettingsStore
 from .test_catalog import TestCase, TestCatalog
 from .test_dashboard import TestDashboard
@@ -38,10 +40,10 @@ MODE_LABELS = {
     "tac": "Three Address Code",
 }
 MODE_PHASES = {
-    "tokens": "lexer",
-    "ast": "parser",
-    "symtab": "semantic",
-    "tac": "tac",
+    "tokens": ("lexer",),
+    "ast": ("parser", "ast"),
+    "symtab": ("symtab", "semantic"),
+    "tac": ("tac",),
 }
 MODE_TABS = {
     "tokens": "tokens",
@@ -72,6 +74,7 @@ class MiniLangIDE(tk.Tk):
         self.runner = runner
         self.project_root = runner.project_root
         self.fonts: ThemeFonts = apply_theme(self)
+        self.toolbar_icons = create_toolbar_icons(self)
         self.catalog = TestCatalog(self.project_root)
         self.settings_store = SettingsStore()
         self.saved_settings = self.settings_store.load()
@@ -85,7 +88,11 @@ class MiniLangIDE(tk.Tk):
         self._work_queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._tree_cases: dict[str, TestCase] = {}
         self._action_buttons: list[ttk.Button] = []
+        self._tooltips: list[ToolTip] = []
         self._test_cancel_event: threading.Event | None = None
+        self.explorer_visible = tk.BooleanVar(value=True)
+        self.output_visible = tk.BooleanVar(value=True)
+        self.fullscreen_enabled = tk.BooleanVar(value=False)
 
         self.title(APP_NAME)
         self.geometry(self.saved_settings.geometry)
@@ -168,9 +175,28 @@ class MiniLangIDE(tk.Tk):
         menu_bar.add_cascade(label="Build", menu=build_menu)
 
         view_menu = tk.Menu(menu_bar)
-        view_menu.add_command(label="Focus Test Explorer", command=self._focus_explorer)
+        view_menu.add_command(label="Focus Explorer", command=self._focus_explorer)
         view_menu.add_command(label="Focus Editor", command=self.editor_focus_safe)
         view_menu.add_command(label="Focus Output", command=self._focus_output)
+        view_menu.add_separator()
+        view_menu.add_checkbutton(
+            label="Show Explorer",
+            accelerator="Ctrl+Shift+E",
+            variable=self.explorer_visible,
+            command=self._toggle_explorer,
+        )
+        view_menu.add_checkbutton(
+            label="Show Output Panel",
+            accelerator="Ctrl+J",
+            variable=self.output_visible,
+            command=self._toggle_output_panel,
+        )
+        view_menu.add_checkbutton(
+            label="Full Screen",
+            accelerator="F11",
+            variable=self.fullscreen_enabled,
+            command=self._toggle_fullscreen,
+        )
         view_menu.add_separator()
         view_menu.add_command(label="Reset Panel Layout", command=self._set_initial_splitters)
         menu_bar.add_cascade(label="View", menu=view_menu)
@@ -225,58 +251,91 @@ class MiniLangIDE(tk.Tk):
         toolbar.grid(row=1, column=0, sticky="ew", pady=(0, 8))
 
         actions = (
-            ("New", self._new_file, "Toolbar.TButton"),
-            ("Open", self._open_file, "Toolbar.TButton"),
-            ("Save", self._save_file, "Toolbar.TButton"),
+            ("New", "new", self._new_file, "New editor buffer (Ctrl+N)"),
+            ("Open", "open", self._open_file, "Open source file (Ctrl+O)"),
+            ("Save", "save", self._save_file, "Save current source (Ctrl+S)"),
         )
-        for text, command, style in actions:
-            button = ttk.Button(toolbar, text=text, command=command, style=style)
+        for text, icon, command, tooltip in actions:
+            button = ttk.Button(
+                toolbar,
+                text=text,
+                image=self.toolbar_icons[icon],
+                compound="left",
+                command=command,
+                style="Toolbar.TButton",
+            )
             button.pack(side="left", padx=(0, 6))
+            self._tooltips.append(ToolTip(button, tooltip, self.fonts))
 
         ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=(4, 10))
 
         build_button = ttk.Button(
             toolbar,
             text="Build Compiler",
+            image=self.toolbar_icons["build"],
+            compound="left",
             command=self._build_compiler,
             style="Toolbar.TButton",
         )
         build_button.pack(side="left", padx=(0, 6))
+        self._tooltips.append(
+            ToolTip(build_button, "Build build/mcc using the project Makefile (Ctrl+B)", self.fonts)
+        )
         run_button = ttk.Button(
             toolbar,
-            text="Compile / Generate TAC   F5",
+            text="Compile  F5",
+            image=self.toolbar_icons["run"],
+            compound="left",
             command=self._run_pipeline,
             style="Accent.TButton",
         )
         run_button.pack(side="left", padx=(0, 6))
+        self._tooltips.append(
+            ToolTip(run_button, "Run the complete compiler pipeline (F5)", self.fonts)
+        )
         clear_button = ttk.Button(
             toolbar,
             text="Clear Outputs",
+            image=self.toolbar_icons["clear"],
+            compound="left",
             command=self._clear_outputs,
             style="Toolbar.TButton",
         )
         clear_button.pack(side="left", padx=(0, 6))
+        self._tooltips.append(ToolTip(clear_button, "Clear compiler output panels", self.fonts))
         tests_button = ttk.Button(
             toolbar,
-            text="Run All 42 Tests",
+            text="Run 42 Tests",
+            image=self.toolbar_icons["tests"],
+            compound="left",
             command=self._run_test_suite,
             style="Toolbar.TButton",
         )
         tests_button.pack(side="left", padx=(0, 6))
+        self._tooltips.append(
+            ToolTip(tests_button, "Run the complete regression suite (Ctrl+T)", self.fonts)
+        )
         load_button = ttk.Button(
             toolbar,
-            text="Load Selected Test",
+            text="Load Test",
+            image=self.toolbar_icons["load"],
+            compound="left",
             command=self._load_selected_test,
             style="Toolbar.TButton",
         )
         load_button.pack(side="left")
+        self._tooltips.append(
+            ToolTip(load_button, "Load the selected test as a protected copy", self.fonts)
+        )
         self._action_buttons.extend((build_button, run_button, tests_button, load_button))
 
+        self.activity_indicator = ActivityIndicator(toolbar)
+        self.activity_indicator.pack(side="right", padx=(4, 8))
         ttk.Label(
             toolbar,
-            text="Double-click a test to load it without modifying the original",
+            text="F5 Compile  •  Ctrl+T Test Suite",
             style="Muted.TLabel",
-        ).pack(side="right", padx=8)
+        ).pack(side="right", padx=(8, 0))
 
     def _build_pipeline(self, parent: ttk.Frame) -> None:
         pipeline_frame = ttk.Frame(parent, style="Surface.TFrame", padding=(8, 7))
@@ -286,6 +345,8 @@ class MiniLangIDE(tk.Tk):
         phase_modes = {
             "lexer": "tokens",
             "parser": "ast",
+            "ast": "ast",
+            "symtab": "symtab",
             "semantic": "symtab",
             "tac": "tac",
         }
@@ -298,19 +359,38 @@ class MiniLangIDE(tk.Tk):
         self.main_pane = ttk.Panedwindow(parent, orient="horizontal")
         self.main_pane.grid(row=3, column=0, sticky="nsew")
 
-        explorer = self._build_test_explorer(self.main_pane)
+        self.explorer_panel = self._build_explorer_panel(self.main_pane)
         self.workspace_pane = ttk.Panedwindow(self.main_pane, orient="vertical")
-        editor_panel = self._build_editor_panel(self.workspace_pane)
-        output_panel = self._build_output_panel(self.workspace_pane)
+        self.editor_panel = self._build_editor_panel(self.workspace_pane)
+        self.output_panel = self._build_output_panel(self.workspace_pane)
 
-        self.main_pane.add(explorer, weight=0)
+        self.main_pane.add(self.explorer_panel, weight=0)
         self.main_pane.add(self.workspace_pane, weight=1)
-        self.workspace_pane.add(editor_panel, weight=3)
-        self.workspace_pane.add(output_panel, weight=2)
+        self.workspace_pane.add(self.editor_panel, weight=3)
+        self.workspace_pane.add(self.output_panel, weight=2)
+
+    def _build_explorer_panel(self, parent: tk.Misc) -> ttk.Frame:
+        frame = ttk.Frame(parent, style="Surface.TFrame", width=310)
+        frame.pack_propagate(False)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+        self.explorer_notebook = ttk.Notebook(frame)
+        self.explorer_notebook.grid(row=0, column=0, sticky="nsew")
+
+        project_tab = ProjectExplorer(
+            self.explorer_notebook,
+            self.project_root,
+            on_open=self._open_project_path,
+        )
+        self.project_explorer = project_tab
+        self.explorer_notebook.add(project_tab, text="Project")
+
+        test_tab = self._build_test_explorer(self.explorer_notebook)
+        self.explorer_notebook.add(test_tab, text="Tests")
+        return frame
 
     def _build_test_explorer(self, parent: tk.Misc) -> ttk.Frame:
-        frame = ttk.Frame(parent, style="Surface.TFrame", padding=8, width=290)
-        frame.pack_propagate(False)
+        frame = ttk.Frame(parent, style="Surface.TFrame", padding=8)
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
 
@@ -401,8 +481,30 @@ class MiniLangIDE(tk.Tk):
         self.output_notebook.grid(row=1, column=0, sticky="nsew")
         self.output_views: dict[str, OutputView | StructuredOutputView] = {}
 
+        compiler_view = OutputView(self.output_notebook, self.fonts)
+        self.output_notebook.add(compiler_view, text="Compiler Output")
+        self.output_views["compiler"] = compiler_view
+
+        token_view = TokenTableView(
+            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
+        )
+        self.output_notebook.add(token_view, text="Lexical Output")
+        self.output_views["tokens"] = token_view
+
+        ast_view = ASTTreeView(
+            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
+        )
+        self.output_notebook.add(ast_view, text="Syntax / AST")
+        self.output_views["ast"] = ast_view
+
+        symbol_view = SymbolTableView(
+            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
+        )
+        self.output_notebook.add(symbol_view, text="Semantic / Symbols")
+        self.output_views["symtab"] = symbol_view
+
         tac_view = TACTableView(self.output_notebook, self.fonts)
-        self.output_notebook.add(tac_view, text="TAC Output")
+        self.output_notebook.add(tac_view, text="Three Address Code")
         self.output_views["tac"] = tac_view
 
         self.diagnostics_view = DiagnosticsView(
@@ -410,15 +512,19 @@ class MiniLangIDE(tk.Tk):
             self.fonts,
             on_activate=self._activate_diagnostic,
         )
-        self.output_notebook.add(self.diagnostics_view, text="Diagnostics")
+        self.output_notebook.add(self.diagnostics_view, text="Errors")
+
+        warnings_view = OutputView(self.output_notebook, self.fonts)
+        self.output_notebook.add(warnings_view, text="Warnings")
+        self.output_views["warnings"] = warnings_view
+
+        console_view = OutputView(self.output_notebook, self.fonts)
+        self.output_notebook.add(console_view, text="Console")
+        self.output_views["console"] = console_view
 
         build_view = OutputView(self.output_notebook, self.fonts)
         self.output_notebook.add(build_view, text="Build Log")
         self.output_views["build"] = build_view
-
-        console_view = OutputView(self.output_notebook, self.fonts)
-        self.output_notebook.add(console_view, text="Session Console")
-        self.output_views["console"] = console_view
 
         self.test_dashboard = TestDashboard(
             self.output_notebook,
@@ -428,24 +534,6 @@ class MiniLangIDE(tk.Tk):
             on_open_source=self._open_test_result,
         )
         self.output_notebook.add(self.test_dashboard, text="Test Suite")
-
-        token_view = TokenTableView(
-            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
-        )
-        self.output_notebook.add(token_view, text="Tokens")
-        self.output_views["tokens"] = token_view
-
-        ast_view = ASTTreeView(
-            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
-        )
-        self.output_notebook.add(ast_view, text="AST")
-        self.output_views["ast"] = ast_view
-
-        symbol_view = SymbolTableView(
-            self.output_notebook, self.fonts, on_navigate=self._navigate_to_location
-        )
-        self.output_notebook.add(symbol_view, text="Symbol Table")
-        self.output_views["symtab"] = symbol_view
 
         expected_view = OutputView(self.output_notebook, self.fonts)
         self.output_notebook.add(expected_view, text="Expected Output")
@@ -632,7 +720,11 @@ class MiniLangIDE(tk.Tk):
         )
         if not selected:
             return
-        path = Path(selected)
+        self._open_project_path(Path(selected), confirm=False)
+
+    def _open_project_path(self, path: Path, confirm: bool = True) -> None:
+        if confirm and not self._confirm_discard_changes():
+            return
         try:
             content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as exc:
@@ -645,6 +737,8 @@ class MiniLangIDE(tk.Tk):
         self.path_heading.set(str(path))
         self.output_views["expected"].clear()
         self.compiler_status.set(f"Opened {path}")
+        if hasattr(self, "project_explorer"):
+            self.project_explorer.reveal(path)
 
     def _save_file(self) -> bool:
         if self.current_file is None:
@@ -674,6 +768,9 @@ class MiniLangIDE(tk.Tk):
         self.path_heading.set(str(self.current_file))
         self._set_dirty(False)
         self.compiler_status.set(f"Saved {self.current_file}")
+        if hasattr(self, "project_explorer"):
+            self.project_explorer.refresh()
+            self.project_explorer.reveal(self.current_file)
         return True
 
     def _set_editor_content(
@@ -915,8 +1012,15 @@ class MiniLangIDE(tk.Tk):
             "Compiler pipeline started: "
             + ", ".join(MODE_LABELS[mode] for mode in modes)
         )
+        self.output_views["compiler"].set_content(
+            "Compiler pipeline is running...\n", "warning"
+        )
+        self.output_views["warnings"].set_content(
+            "Scanning compiler output for warnings...\n"
+        )
         for mode in modes:
-            self.pipeline.set_state(MODE_PHASES[mode], "running")
+            for phase in MODE_PHASES[mode]:
+                self.pipeline.set_state(phase, "running")
             self.output_views[MODE_TABS[mode]].set_content("Running compiler...\n", "warning")
         threading.Thread(
             target=self._compile_worker,
@@ -992,8 +1096,8 @@ class MiniLangIDE(tk.Tk):
             total_duration += result.duration_ms
             max_exit = max(max_exit, result.return_code)
             all_successful = all_successful and result.ok
-            phase = MODE_PHASES[mode]
-            self.pipeline.set_state(phase, "success" if result.ok else "error")
+            for phase in MODE_PHASES[mode]:
+                self.pipeline.set_state(phase, "success" if result.ok else "error")
             output = result.stdout.rstrip()
             if not output:
                 output = (
@@ -1045,8 +1149,38 @@ class MiniLangIDE(tk.Tk):
 
         token_count = self._extract_token_count(results)
         error_count = len(parsed_diagnostics) or self._extract_error_count(results)
+        warning_lines = self._extract_warnings(results)
+        warning_count = len(warning_lines)
+        compiler_report = [
+            "MINILANG COMPILER PIPELINE",
+            "==========================",
+            f"Source: {self.source_label}",
+            "",
+            *status_lines,
+            "",
+            f"Result: {'SUCCESS' if all_successful else 'FAILED'}",
+            f"Total time: {total_duration} ms",
+            f"Tokens: {token_count}",
+            f"Errors: {error_count}",
+            f"Warnings: {warning_count}",
+        ]
+        self.output_views["compiler"].set_content(
+            "\n".join(compiler_report) + "\n",
+            "success" if all_successful else "error",
+        )
+        if warning_lines:
+            self.output_views["warnings"].set_content(
+                "COMPILER WARNINGS\n=================\n\n"
+                + "\n".join(warning_lines)
+                + "\n",
+                "warning",
+            )
+        else:
+            self.output_views["warnings"].set_content(
+                "No compiler warnings were reported.\n", "success"
+            )
         self.metrics_status.set(
-            f"Tokens {token_count}  |  Errors {error_count}  |  Warnings 0"
+            f"Tokens {token_count}  |  Errors {error_count}  |  Warnings {warning_count}"
         )
         self.run_status.set(f"Exit {max_exit}  |  Time {total_duration} ms")
         if all_successful:
@@ -1115,6 +1249,7 @@ class MiniLangIDE(tk.Tk):
         self.is_busy = True
         for button in self._action_buttons:
             button.configure(state="disabled")
+        self.activity_indicator.start()
         self.compiler_status.set(status)
         return True
 
@@ -1122,6 +1257,7 @@ class MiniLangIDE(tk.Tk):
         self.is_busy = False
         for button in self._action_buttons:
             button.configure(state="normal")
+        self.activity_indicator.stop()
 
     @staticmethod
     def _decode_process_output(value: bytes | str | None) -> str:
@@ -1153,16 +1289,32 @@ class MiniLangIDE(tk.Tk):
                     counts.append(len(category_lines))
         return max(counts, default=0)
 
+    @staticmethod
+    def _extract_warnings(results: dict[str, CompilerResult]) -> tuple[str, ...]:
+        warnings: list[str] = []
+        seen: set[str] = set()
+        for result in results.values():
+            for line in f"{result.stdout}\n{result.stderr}".splitlines():
+                cleaned = line.strip()
+                if not cleaned or re.search(r"\bwarning\b", cleaned, re.IGNORECASE) is None:
+                    continue
+                if cleaned not in seen:
+                    seen.add(cleaned)
+                    warnings.append(cleaned)
+        return tuple(warnings)
+
     # ------------------------------------------------------------------
     # General UI helpers
     # ------------------------------------------------------------------
     def _clear_outputs(self) -> None:
         messages = {
+            "compiler": "Run the compiler to view the complete pipeline summary.\n",
             "tac": "Run TAC generation to view intermediate code.\n",
             "build": "Run Build Compiler to capture the Makefile output.\n",
             "tokens": "Run Lexical Analysis to view the token stream.\n",
             "ast": "Run Parser / AST to view the abstract syntax tree.\n",
             "symtab": "Run Semantic / Symbols to view the symbol table.\n",
+            "warnings": "No compiler warnings.\n",
             "console": "Session console ready.\n",
         }
         for key, message in messages.items():
@@ -1190,7 +1342,11 @@ class MiniLangIDE(tk.Tk):
         self.bind("<Control-Shift-S>", lambda _event: self._save_file_as())
         self.bind("<Control-b>", lambda _event: self._build_compiler())
         self.bind("<Control-t>", lambda _event: self._run_test_suite())
+        self.bind("<Control-Shift-e>", self._keyboard_toggle_explorer)
+        self.bind("<Control-j>", self._keyboard_toggle_output)
         self.bind("<F5>", lambda _event: self._run_pipeline())
+        self.bind("<F11>", self._keyboard_toggle_fullscreen)
+        self.bind("<Escape>", self._leave_fullscreen)
         self.bind("<Control-Key-1>", lambda _event: self._run_mode("tokens"))
         self.bind("<Control-Key-2>", lambda _event: self._run_mode("ast"))
         self.bind("<Control-Key-3>", lambda _event: self._run_mode("symtab"))
@@ -1209,6 +1365,10 @@ class MiniLangIDE(tk.Tk):
         self.cursor_status.set(f"Ln {line}, Col {column}")
 
     def _set_initial_splitters(self) -> None:
+        self.explorer_visible.set(True)
+        self.output_visible.set(True)
+        self._toggle_explorer()
+        self._toggle_output_panel()
         try:
             self.main_pane.sashpos(0, 285)
             available = max(self.workspace_pane.winfo_height(), 700)
@@ -1229,10 +1389,20 @@ class MiniLangIDE(tk.Tk):
 
     def _save_layout(self) -> None:
         try:
+            main_sash = (
+                self.main_pane.sashpos(0)
+                if str(self.explorer_panel) in self.main_pane.panes()
+                else self.saved_settings.main_sash
+            )
+            workspace_sash = (
+                self.workspace_pane.sashpos(0)
+                if str(self.output_panel) in self.workspace_pane.panes()
+                else self.saved_settings.workspace_sash
+            )
             settings = AppSettings(
                 geometry=self.geometry(),
-                main_sash=self.main_pane.sashpos(0),
-                workspace_sash=self.workspace_pane.sashpos(0),
+                main_sash=main_sash,
+                workspace_sash=workspace_sash,
                 selected_tab=self.output_notebook.index("current"),
             )
             self.settings_store.save(settings)
@@ -1240,7 +1410,61 @@ class MiniLangIDE(tk.Tk):
             pass
 
     def _focus_explorer(self) -> None:
-        self.test_tree.focus_set()
+        if not self.explorer_visible.get():
+            self.explorer_visible.set(True)
+            self._toggle_explorer()
+        current = self.explorer_notebook.select()
+        widget = self.nametowidget(current) if current else None
+        if isinstance(widget, ProjectExplorer):
+            widget.focus_view()
+        else:
+            self.test_tree.focus_set()
+
+    def _toggle_explorer(self) -> None:
+        present = str(self.explorer_panel) in self.main_pane.panes()
+        if self.explorer_visible.get() and not present:
+            self.main_pane.insert(0, self.explorer_panel, weight=0)
+            self.after_idle(lambda: self.main_pane.sashpos(0, 285))
+        elif not self.explorer_visible.get() and present:
+            self.main_pane.forget(self.explorer_panel)
+
+    def _toggle_output_panel(self) -> None:
+        present = str(self.output_panel) in self.workspace_pane.panes()
+        if self.output_visible.get() and not present:
+            self.workspace_pane.add(self.output_panel, weight=2)
+            self.after_idle(self._restore_output_splitter)
+        elif not self.output_visible.get() and present:
+            self.workspace_pane.forget(self.output_panel)
+
+    def _restore_output_splitter(self) -> None:
+        try:
+            available = max(self.workspace_pane.winfo_height(), 700)
+            self.workspace_pane.sashpos(0, int(available * 0.62))
+        except tk.TclError:
+            pass
+
+    def _toggle_fullscreen(self) -> None:
+        self.attributes("-fullscreen", self.fullscreen_enabled.get())
+
+    def _keyboard_toggle_explorer(self, _event: tk.Event[tk.Misc]) -> str:
+        self.explorer_visible.set(not self.explorer_visible.get())
+        self._toggle_explorer()
+        return "break"
+
+    def _keyboard_toggle_output(self, _event: tk.Event[tk.Misc]) -> str:
+        self.output_visible.set(not self.output_visible.get())
+        self._toggle_output_panel()
+        return "break"
+
+    def _keyboard_toggle_fullscreen(self, _event: tk.Event[tk.Misc]) -> str:
+        self.fullscreen_enabled.set(not self.fullscreen_enabled.get())
+        self._toggle_fullscreen()
+        return "break"
+
+    def _leave_fullscreen(self, _event: tk.Event[tk.Misc]) -> None:
+        if self.fullscreen_enabled.get():
+            self.fullscreen_enabled.set(False)
+            self._toggle_fullscreen()
 
     def editor_focus_safe(self) -> None:
         if hasattr(self, "editor"):
@@ -1274,6 +1498,9 @@ class MiniLangIDE(tk.Tk):
         self.compiler_status.set(f"Navigated to line {line}, column {column}")
 
     def _focus_output(self) -> None:
+        if not self.output_visible.get():
+            self.output_visible.set(True)
+            self._toggle_output_panel()
         current = self.output_notebook.select()
         if current:
             widget = self.nametowidget(current)
