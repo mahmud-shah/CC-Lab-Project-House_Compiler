@@ -1,3 +1,5 @@
+"""Professional Tkinter IDE shell for the MiniLang compiler."""
+
 from __future__ import annotations
 
 import queue
@@ -22,7 +24,6 @@ from .output_views import (
     TokenTableView,
 )
 from .polish import ActivityIndicator, ToolTip, create_toolbar_icons
-from .project_explorer import ProjectExplorer
 from .settings import AppSettings, SettingsStore
 from .test_catalog import TestCase, TestCatalog
 from .test_dashboard import TestDashboard
@@ -359,7 +360,7 @@ class MiniLangIDE(tk.Tk):
         self.main_pane = ttk.Panedwindow(parent, orient="horizontal")
         self.main_pane.grid(row=3, column=0, sticky="nsew")
 
-        self.explorer_panel = self._build_explorer_panel(self.main_pane)
+        self.explorer_panel = self._build_test_explorer(self.main_pane)
         self.workspace_pane = ttk.Panedwindow(self.main_pane, orient="vertical")
         self.editor_panel = self._build_editor_panel(self.workspace_pane)
         self.output_panel = self._build_output_panel(self.workspace_pane)
@@ -369,28 +370,9 @@ class MiniLangIDE(tk.Tk):
         self.workspace_pane.add(self.editor_panel, weight=3)
         self.workspace_pane.add(self.output_panel, weight=2)
 
-    def _build_explorer_panel(self, parent: tk.Misc) -> ttk.Frame:
-        frame = ttk.Frame(parent, style="Surface.TFrame", width=310)
-        frame.pack_propagate(False)
-        frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(0, weight=1)
-        self.explorer_notebook = ttk.Notebook(frame)
-        self.explorer_notebook.grid(row=0, column=0, sticky="nsew")
-
-        project_tab = ProjectExplorer(
-            self.explorer_notebook,
-            self.project_root,
-            on_open=self._open_project_path,
-        )
-        self.project_explorer = project_tab
-        self.explorer_notebook.add(project_tab, text="Project")
-
-        test_tab = self._build_test_explorer(self.explorer_notebook)
-        self.explorer_notebook.add(test_tab, text="Tests")
-        return frame
-
     def _build_test_explorer(self, parent: tk.Misc) -> ttk.Frame:
-        frame = ttk.Frame(parent, style="Surface.TFrame", padding=8)
+        frame = ttk.Frame(parent, style="Surface.TFrame", padding=8, width=310)
+        frame.pack_propagate(False)
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(2, weight=1)
 
@@ -737,8 +719,6 @@ class MiniLangIDE(tk.Tk):
         self.path_heading.set(str(path))
         self.output_views["expected"].clear()
         self.compiler_status.set(f"Opened {path}")
-        if hasattr(self, "project_explorer"):
-            self.project_explorer.reveal(path)
 
     def _save_file(self) -> bool:
         if self.current_file is None:
@@ -768,9 +748,6 @@ class MiniLangIDE(tk.Tk):
         self.path_heading.set(str(self.current_file))
         self._set_dirty(False)
         self.compiler_status.set(f"Saved {self.current_file}")
-        if hasattr(self, "project_explorer"):
-            self.project_explorer.refresh()
-            self.project_explorer.reveal(self.current_file)
         return True
 
     def _set_editor_content(
@@ -1413,12 +1390,7 @@ class MiniLangIDE(tk.Tk):
         if not self.explorer_visible.get():
             self.explorer_visible.set(True)
             self._toggle_explorer()
-        current = self.explorer_notebook.select()
-        widget = self.nametowidget(current) if current else None
-        if isinstance(widget, ProjectExplorer):
-            widget.focus_view()
-        else:
-            self.test_tree.focus_set()
+        self.test_tree.focus_set()
 
     def _toggle_explorer(self) -> None:
         present = str(self.explorer_panel) in self.main_pane.panes()
