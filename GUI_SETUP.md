@@ -30,12 +30,11 @@ No third-party Python package is required.
 
 ## Workspace
 
-- **Project** lists editable repository source and documentation files.
-- **Tests** groups all valid examples and invalid lexical, syntax, and semantic
-  cases from the repository.
-- Double-click a Project file to edit it normally.
+- **Test Explorer** groups all valid examples and invalid lexical, syntax, and
+  semantic cases from the repository.
 - Double-click a Test to load a protected editor copy, preserving the original
   test and golden output.
+- Use **Open** or `Ctrl+O` to open another source file normally.
 - Drag the panel separators to resize the explorer, editor, and output areas.
 - Use `Ctrl+Shift+E` and `Ctrl+J` to show or hide the explorer and output panel.
 
@@ -104,7 +103,7 @@ requests cancellation between compiler checks.
 
 ## Recommended demonstration
 
-1. Launch the IDE and show the Project and Tests explorers.
+1. Launch the IDE and show the Test Explorer.
 2. Load the complete valid example and press `F5`.
 3. Show all six pipeline stages passing.
 4. Demonstrate the lexical table, AST hierarchy, symbol scopes, and TAC table.
@@ -121,7 +120,6 @@ requests cancellation between compiler checks.
 - `gui/compiler_runner.py` safely invokes `build/mcc` without shell expansion.
 - `gui/output_parsers.py` and `gui/output_views.py` provide structured views.
 - `gui/test_runner.py` and `gui/test_dashboard.py` implement regression checks.
-- `gui/project_explorer.py` provides repository navigation.
 - `gui/theme.py`, `gui/widgets.py`, and `gui/polish.py` provide the visual system.
 - `gui/settings.py` persists window and panel layout outside the repository.
 
